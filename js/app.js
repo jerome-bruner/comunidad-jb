@@ -1,0 +1,762 @@
+/* ==========================================================
+   Comunidad JB — app.js
+   ----------------------------------------------------------
+   Todas las pantallas de la app.
+
+   CÓMO ESTÁ ARMADA
+   Una sola página que cambia lo que hay dentro de #cuerpo.
+   No hay navegación entre archivos: así la app se siente
+   instantánea y el botón de atrás no saca al papá de la app
+   sin querer.
+
+   LO QUE LA APP NO DECIDE
+   Ningún candado vive aquí. La app esconde botones por
+   comodidad, pero quien de verdad revisa si este tutor puede
+   ver a este alumno es el servidor, en cada llamada. Si
+   alguien abriera la consola del navegador y cambiara lo que
+   quisiera, no alcanzaría nada: el servidor le volvería a
+   preguntar por su sesión y su vínculo.
+   ========================================================== */
+
+var ESTADO = {
+  sesion: null,     // token guardado en el teléfono
+  tutor: '',        // nombre del adulto
+  correo: '',       // enmascarado, solo para mostrar
+  hijos: [],
+  hijo: null,       // el alumno seleccionado
+  tab: 'calificaciones'
+};
+
+/* ---------- utilidades ---------- */
+
+function $(id) { return document.getElementById(id); }
+
+/** Escapa lo que venga del servidor antes de meterlo en la página. */
+function esc(t) {
+  return String(t == null ? '' : t)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function pintar(html) {
+  $('cuerpo').innerHTML = html;
+  window.scrollTo(0, 0);
+}
+
+function etiqueta(t) { $('encEtiqueta').textContent = t; }
+
+/** Encabezado grande (antes de entrar) o barra chica (ya adentro). */
+function modoEncabezado(dentro) {
+  $('enc').classList.toggle('oculto', !!dentro);
+  $('barra').classList.toggle('on', !!dentro);
+  $('tabs').classList.toggle('on', !!dentro);
+}
+
+function aviso(id) { return '<div class="aviso" id="' + id + '"></div>'; }
+
+function ponAviso(id, clase, texto) {
+  var c = $(id);
+  if (!c) return;
+  c.className = 'aviso ' + clase;
+  c.innerHTML = texto;
+}
+
+function limpiaAviso(id) {
+  var c = $(id);
+  if (c) { c.className = 'aviso'; c.innerHTML = ''; }
+}
+
+function iniciales(nombre) {
+  var p = String(nombre || '').trim().split(/\s+/);
+  return ((p[0] || '')[0] || '') + ((p[1] || '')[0] || '');
+}
+
+function tarjetaAlumno(nombre, grupo) {
+  return '<div class="alumno"><div class="nom">' + esc(nombre) + '</div>' +
+         '<div class="det">' + esc(grupo) + '</div></div>';
+}
+
+/** Barra de fuerza de la contraseña. Orienta, no califica. */
+function medirContrasena(c) {
+  var n = 0;
+  if (c.length >= 6) n++;
+  if (c.length >= 10) n++;
+  if (/[0-9]/.test(c) && /[a-zA-Z]/.test(c)) n++;
+  return n;   // 0 a 3
+}
+
+function engancharFuerza(idCampo, idBarra) {
+  var campo = $(idCampo), barra = $(idBarra);
+  if (!campo || !barra) return;
+  campo.addEventListener('input', function () {
+    var n = medirContrasena(campo.value);
+    barra.style.width = (n === 0 ? 8 : n * 33) + '%';
+    barra.className = n >= 3 ? 'buena' : (n === 2 ? 'media' : '');
+  });
+}
+
+/* ==========================================================
+   ARRANQUE
+   ========================================================== */
+
+function arrancar() {
+  $('encColegio').textContent = CONFIG.COLEGIO;
+  $('encCiclo').textContent = CONFIG.CICLO;
+  $('pie').innerHTML = 'Dirección de secundaria · ' + esc(CONFIG.COLEGIO) +
+    '<br><span style="font-size:9.5px">Versión ' + esc(CONFIG.VERSION) + '</span>';
+
+  $('barraMenu').addEventListener('click', vistaMenu);
+
+  Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (b) {
+    b.addEventListener('click', function () { irATab(b.dataset.t); });
+  });
+
+  // ¿Viene con una liga de alta? Eso manda sobre todo lo demás.
+  var token = new URLSearchParams(window.location.search).get('r');
+  if (token) { abrirInvitacion(token); return; }
+
+  // ¿Hay sesión guardada en este teléfono?
+  var guardada = MEMORIA.leer('sesion');
+  if (guardada) { revalidarSesion(guardada); return; }
+
+  vistaEntrar();
+}
+
+function revalidarSesion(token) {
+  modoEncabezado(false);
+  etiqueta('Comunidad JB');
+  pintar('<div class="cargando">Abriendo su cuenta…</div>');
+
+  API.sesion(token).then(function (r) {
+    if (!r.ok) {
+      // Si se cayó la red NO se borra la sesión: el papá volvería a
+      // teclear su contraseña nada más por estar en el elevador.
+      if (!r.sinRed) MEMORIA.borrar('sesion');
+      vistaEntrar(r.sinRed ? r.mensaje : '');
+      return;
+    }
+    ESTADO.sesion = token;
+    ESTADO.tutor = r.tutor;
+    ESTADO.correo = r.correo || '';
+    ESTADO.hijos = r.hijos || [];
+    elegirHijoOEntrar();
+  });
+}
+
+/**
+ * Con un solo hijo se brinca el selector. Con varios, se recuerda
+ * el último que vio, que casi siempre es el que va a querer otra vez.
+ */
+function elegirHijoOEntrar() {
+  if (ESTADO.hijos.length === 1) { entrarConHijo(ESTADO.hijos[0]); return; }
+
+  var ultimo = MEMORIA.leer('hijo');
+  if (ultimo) {
+    var hallado = ESTADO.hijos.filter(function (h) {
+      return (h.grupo + '|' + h.nombre) === ultimo;
+    })[0];
+    if (hallado) { entrarConHijo(hallado); return; }
+  }
+  vistaHijos();
+}
+
+/* ==========================================================
+   ALTA · la liga personal
+   ========================================================== */
+
+function abrirInvitacion(token) {
+  modoEncabezado(false);
+  etiqueta('Registro de acceso');
+  pintar('<div class="cargando">Revisando su liga…</div>');
+
+  API.verInvitacion(token).then(function (r) {
+    if (!r.ok) { vistaLigaNoSirve(r.mensaje); return; }
+    vistaRegistro(token, r.alumno, r.grupo);
+  });
+}
+
+function vistaRegistro(token, alumno, grupo) {
+  etiqueta('Registro de acceso');
+  pintar(
+    tarjetaAlumno(alumno, grupo) +
+    '<p class="titulo">Registre su correo</p>' +
+    '<p class="texto">Esta liga es personal y sirve una sola vez. Con ella se da de alta ' +
+      'un adulto para ver la información de este alumno.</p>' +
+
+    '<label for="correo">Su correo electrónico</label>' +
+    '<input type="email" id="correo" autocomplete="email" inputmode="email" placeholder="correo@ejemplo.com">' +
+
+    '<label for="nombre">Su nombre completo</label>' +
+    '<input type="text" id="nombre" autocomplete="name" placeholder="Nombre y apellidos">' +
+
+    '<label for="parentesco">Parentesco</label>' +
+    '<input type="text" id="parentesco" placeholder="Madre, padre, abuela, tutor…">' +
+
+    '<div class="aviso ambar">Si otro adulto también necesita acceso, debe pedir ' +
+      'su propia liga en la dirección del colegio.</div>' +
+
+    aviso('res') +
+    '<button class="btn" id="btn">Continuar</button>' +
+
+    '<p class="mini" style="margin-top:16px">Los datos del alumno son información confidencial. ' +
+      'El colegio es responsable de su resguardo conforme a la Ley Federal de Protección de ' +
+      'Datos Personales en Posesión de los Particulares.</p>'
+  );
+
+  $('btn').addEventListener('click', function () {
+    var correo = $('correo').value.trim();
+    var nombre = $('nombre').value.trim();
+    var parentesco = $('parentesco').value.trim();
+
+    if (!correo || correo.indexOf('@') === -1) {
+      ponAviso('res', 'rojo', 'Escriba un correo electrónico válido.'); return;
+    }
+    if (nombre.length < 5) {
+      ponAviso('res', 'rojo', 'Escriba su nombre completo.'); return;
+    }
+
+    this.disabled = true;
+    ponAviso('res', 'ambar', 'Registrando…');
+
+    API.registrar(token, correo, nombre, parentesco).then(function (r) {
+      $('btn').disabled = false;
+      if (!r.ok) {
+        if (r.usada || r.vencida) { vistaLigaNoSirve(r.mensaje); return; }
+        ponAviso('res', 'rojo', esc(r.mensaje));
+        return;
+      }
+      // Un papá que ya tenía cuenta solo sumó otro hijo: no hay
+      // código nuevo que esperar, entra con lo que ya sabe.
+      if (r.yaTeniaCuenta) { vistaYaTeniaCuenta(r.mensaje, correo); return; }
+      vistaCodigoEnviado(correo, r.correoOculto);
+    });
+  });
+}
+
+function vistaCodigoEnviado(correo, correoOculto) {
+  etiqueta('Revise su correo');
+  pintar(
+    '<div class="icono ok">&#10003;</div>' +
+    '<p class="titulo" style="text-align:center">Le enviamos un código</p>' +
+    '<p class="texto">Va en camino a <b>' + esc(correoOculto || correo) + '</b>. Puede tardar ' +
+      'un par de minutos; revise también el correo no deseado.</p>' +
+    '<p class="texto">Con ese código va a crear la contraseña con la que entrará de ' +
+      'ahora en adelante.</p>' +
+    '<div class="aviso verde"><b>Guarde esta app en su pantalla de inicio</b> para no tener ' +
+      'que buscar la liga otra vez. En el menú del navegador: «Agregar a pantalla de inicio».</div>' +
+    '<button class="btn" id="btn">Ya tengo el código</button>'
+  );
+  $('btn').addEventListener('click', function () { vistaCrearContrasena(correo); });
+}
+
+function vistaYaTeniaCuenta(mensaje, correo) {
+  etiqueta('Listo');
+  pintar(
+    '<div class="icono ok">&#10003;</div>' +
+    '<p class="titulo" style="text-align:center">Ya quedó agregado</p>' +
+    '<p class="texto">' + esc(mensaje) + '</p>' +
+    '<button class="btn" id="btn">Entrar</button>'
+  );
+  $('btn').addEventListener('click', function () { vistaEntrar('', correo); });
+}
+
+function vistaCrearContrasena(correo, mensajePrevio) {
+  etiqueta('Primera vez');
+  pintar(
+    '<p class="titulo">Cree su contraseña</p>' +
+    '<p class="texto">Escriba el código que le llegó por correo y elija la contraseña ' +
+      'con la que va a entrar de ahora en adelante.</p>' +
+
+    (mensajePrevio ? '<div class="aviso ambar">' + esc(mensajePrevio) + '</div>' : '') +
+
+    '<label for="correo">Su correo</label>' +
+    '<input type="email" id="correo" autocomplete="email" inputmode="email" value="' + esc(correo || '') + '">' +
+
+    '<label for="codigo">Código del correo</label>' +
+    '<input type="text" id="codigo" class="cod" maxlength="5" autocomplete="one-time-code" ' +
+      'autocapitalize="characters" placeholder="-----">' +
+
+    '<label for="c1">Su contraseña nueva</label>' +
+    '<input type="password" id="c1" autocomplete="new-password" placeholder="Mínimo 6 caracteres">' +
+    '<div class="fuerza"><i id="fz"></i></div>' +
+
+    '<label for="c2">Repita la contraseña</label>' +
+    '<input type="password" id="c2" autocomplete="new-password" placeholder="La misma de arriba">' +
+
+    '<div class="aviso ambar"><b>Nadie más la va a saber, ni el colegio.</b> Si la olvida, ' +
+      'se repone con un código nuevo a su correo.</div>' +
+
+    aviso('res') +
+    '<button class="btn" id="btn">Guardar y entrar</button>'
+  );
+  engancharFuerza('c1', 'fz');
+
+  $('btn').addEventListener('click', function () {
+    var correoV = $('correo').value.trim();
+    var codigo = $('codigo').value.trim();
+    var c1 = $('c1').value, c2 = $('c2').value;
+
+    if (codigo.length < 5) { ponAviso('res', 'rojo', 'El código es de 5 caracteres.'); return; }
+    if (c1 !== c2) { ponAviso('res', 'rojo', 'Las dos contraseñas no son iguales.'); return; }
+    if (c1.length < 6) { ponAviso('res', 'rojo', 'La contraseña debe tener al menos 6 caracteres.'); return; }
+
+    this.disabled = true;
+    ponAviso('res', 'ambar', 'Guardando…');
+
+    API.crearContrasena(correoV, codigo, c1).then(function (r) {
+      $('btn').disabled = false;
+      if (!r.ok) { ponAviso('res', r.bloqueado ? 'rojo' : 'ambar', esc(r.mensaje)); return; }
+      abrirSesion(r);
+    });
+  });
+}
+
+function vistaLigaNoSirve(mensaje) {
+  modoEncabezado(false);
+  etiqueta('Liga no disponible');
+  pintar(
+    '<div class="icono alto">!</div>' +
+    '<p class="titulo" style="text-align:center">Esta liga ya no sirve</p>' +
+    '<p class="texto">' + esc(mensaje || 'La liga no es válida.') + '</p>' +
+    '<div class="aviso ambar">' +
+      '<b>Si usted ya se registró:</b> entre con su correo y su contraseña.<br><br>' +
+      '<b>Si necesita darse de alta:</b> pida su propia liga en la dirección del colegio. ' +
+      'Cada adulto necesita la suya.</div>' +
+    '<button class="btn sec" id="btn">Ya tengo cuenta, entrar</button>'
+  );
+  $('btn').addEventListener('click', function () { vistaEntrar(); });
+}
+
+/* ==========================================================
+   ENTRAR
+   ========================================================== */
+
+function vistaEntrar(mensajePrevio, correoSugerido) {
+  modoEncabezado(false);
+  etiqueta('Comunidad JB');
+
+  var recordado = correoSugerido || MEMORIA.leer('correo') || '';
+
+  pintar(
+    '<p class="titulo">Entre a su cuenta</p>' +
+    (mensajePrevio ? '<div class="aviso ambar">' + esc(mensajePrevio) + '</div>' : '') +
+
+    '<label for="correo">Correo</label>' +
+    '<input type="email" id="correo" autocomplete="email" inputmode="email" ' +
+      'placeholder="correo@ejemplo.com" value="' + esc(recordado) + '">' +
+
+    '<label for="pass">Contraseña</label>' +
+    '<input type="password" id="pass" autocomplete="current-password" placeholder="Su contraseña">' +
+
+    aviso('res') +
+    '<button class="btn" id="btn">Entrar</button>' +
+    '<button class="btn sec chi" id="btnOlvide">Olvidé mi contraseña</button>' +
+
+    // Esta puerta es la salida del papá al que la dirección le
+    // repuso el acceso: su contraseña ya no sirve y tiene un código
+    // esperándolo en el correo. El mensaje de «entrar» no se lo
+    // puede decir sin delatar qué correos están dados de alta, así
+    // que el camino tiene que estar a la vista por su cuenta.
+    '<button class="btn sec chi" id="btnCodigo">Tengo un código del colegio</button>' +
+
+    '<p class="mini" style="margin-top:18px;text-align:center">Después de 5 intentos ' +
+      'fallidos el acceso se bloquea por 30 minutos.</p>'
+  );
+
+  $('btnOlvide').addEventListener('click', function () {
+    vistaOlvide($('correo').value.trim());
+  });
+
+  $('btnCodigo').addEventListener('click', function () {
+    vistaCrearContrasena($('correo').value.trim());
+  });
+
+  $('pass').addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter') $('btn').click();
+  });
+
+  $('btn').addEventListener('click', function () {
+    var correo = $('correo').value.trim();
+    var pass = $('pass').value;
+    if (!correo || !pass) { ponAviso('res', 'rojo', 'Escriba su correo y su contraseña.'); return; }
+
+    this.disabled = true;
+    ponAviso('res', 'ambar', 'Entrando…');
+
+    API.entrar(correo, pass).then(function (r) {
+      $('btn').disabled = false;
+      if (!r.ok) {
+        ponAviso('res', r.bloqueado ? 'rojo' : 'ambar', esc(r.mensaje));
+        return;
+      }
+      MEMORIA.guardar('correo', correo);
+      abrirSesion(r);
+    });
+  });
+}
+
+function abrirSesion(r) {
+  ESTADO.sesion = r.sesion;
+  ESTADO.tutor = r.tutor || '';
+  ESTADO.hijos = r.hijos || [];
+  MEMORIA.guardar('sesion', r.sesion);
+  elegirHijoOEntrar();
+}
+
+function vistaOlvide(correoSugerido) {
+  modoEncabezado(false);
+  etiqueta('Recuperar acceso');
+  pintar(
+    '<p class="titulo">Reponer su contraseña</p>' +
+    '<p class="texto">Escriba su correo registrado y le enviaremos un código para poner ' +
+      'una contraseña nueva.</p>' +
+
+    '<label for="correo">Correo registrado</label>' +
+    '<input type="email" id="correo" autocomplete="email" inputmode="email" ' +
+      'placeholder="correo@ejemplo.com" value="' + esc(correoSugerido || '') + '">' +
+
+    aviso('res') +
+    '<button class="btn" id="btn">Enviarme el código</button>' +
+    '<button class="btn sec chi" id="btnAtras">Regresar</button>' +
+
+    '<div class="aviso ambar"><b>Ni el colegio puede ver su contraseña.</b> La única ' +
+      'forma de recuperarla es poniendo una nueva.</div>'
+  );
+
+  $('btnAtras').addEventListener('click', function () { vistaEntrar(); });
+
+  $('btn').addEventListener('click', function () {
+    var correo = $('correo').value.trim();
+    if (!correo || correo.indexOf('@') === -1) {
+      ponAviso('res', 'rojo', 'Escriba un correo electrónico válido.'); return;
+    }
+    this.disabled = true;
+    ponAviso('res', 'ambar', 'Enviando…');
+
+    API.olvide(correo).then(function (r) {
+      $('btn').disabled = false;
+      // El servidor contesta lo mismo exista o no el correo, a
+      // propósito: esta pantalla no debe servir de buscador.
+      ponAviso('res', 'verde', esc(r.mensaje));
+      setTimeout(function () { vistaCrearContrasena(correo); }, 2200);
+    });
+  });
+}
+
+/* ==========================================================
+   CUÁL HIJO
+   ========================================================== */
+
+function vistaHijos() {
+  modoEncabezado(false);
+  etiqueta('Comunidad JB');
+
+  var lista = ESTADO.hijos.map(function (h, i) {
+    return '<button class="hijo" data-i="' + i + '">' +
+      '<div class="ini">' + esc(iniciales(h.nombre)) + '</div>' +
+      '<div><div class="nom">' + esc(h.nombre) + '</div>' +
+      '<div class="det">' + esc(h.grupo) + '</div></div></button>';
+  }).join('');
+
+  pintar(
+    '<p class="titulo" style="text-align:center">¿A quién quiere ver?</p>' +
+    '<p class="texto" style="text-align:center">Hola, ' + esc(ESTADO.tutor.split(' ')[0]) + '.</p>' +
+    '<div style="margin-top:18px">' + lista + '</div>'
+  );
+
+  Array.prototype.forEach.call(document.querySelectorAll('.hijo'), function (b) {
+    b.addEventListener('click', function () {
+      entrarConHijo(ESTADO.hijos[Number(b.dataset.i)]);
+    });
+  });
+}
+
+function entrarConHijo(hijo) {
+  ESTADO.hijo = hijo;
+  MEMORIA.guardar('hijo', hijo.grupo + '|' + hijo.nombre);
+  $('barraNombre').textContent = hijo.nombre;
+  $('barraGrupo').textContent = hijo.grupo;
+  modoEncabezado(true);
+  irATab('calificaciones');
+}
+
+/* ==========================================================
+   PESTAÑAS
+   ========================================================== */
+
+function irATab(cual) {
+  ESTADO.tab = cual;
+  Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (b) {
+    b.classList.toggle('on', b.dataset.t === cual);
+  });
+
+  if (cual === 'calificaciones') { tabCalificaciones(); return; }
+  tabEnConstruccion(cual);
+}
+
+function tabEnConstruccion(cual) {
+  var textos = {
+    pagos: ['Pagos', 'Aquí va a ver los pagos del ciclo: lo que ya está cubierto y lo que falta.'],
+    cooperativa: ['Cooperativa', 'Aquí va a ver el saldo del comedor y los prepagos.'],
+    calendario: ['Calendario', 'Aquí va a ver el calendario mensual y los eventos próximos.'],
+    credencial: ['Credencial', 'Aquí va a ver la credencial con el código de su hijo, para la salida.']
+  };
+  var t = textos[cual] || ['Próximamente', ''];
+  pintar(
+    '<div class="icono ok" style="background:#F3EFEC;border-color:#E0D9D3;color:#8C8377">&#8987;</div>' +
+    '<p class="titulo" style="text-align:center">' + esc(t[0]) + '</p>' +
+    '<p class="texto" style="text-align:center">' + esc(t[1]) + '</p>' +
+    '<div class="aviso ambar">Esta sección todavía está en construcción. Le avisaremos ' +
+      'desde el colegio en cuanto esté lista.</div>'
+  );
+}
+
+/* ---------- calificaciones ---------- */
+
+function colorCal(c) { return c >= 8 ? 'ok' : (c >= 7 ? 'med' : 'baj'); }
+
+function tabCalificaciones() {
+  pintar('<div class="cargando">Cargando calificaciones…</div>');
+
+  API.calificaciones(ESTADO.sesion, ESTADO.hijo.grupo, ESTADO.hijo.nombre).then(function (r) {
+    if (!r.ok) {
+      if (r.expirada) { sesionVencida(); return; }
+      pintar('<div class="aviso rojo">' + esc(r.mensaje) + '</div>');
+      return;
+    }
+    if (r.sinReporte) {
+      pintar(
+        '<div class="icono ok" style="background:#F3EFEC;border-color:#E0D9D3;color:#8C8377">&#8987;</div>' +
+        '<p class="titulo" style="text-align:center">Todavía no hay reporte</p>' +
+        '<p class="texto" style="text-align:center">' + esc(r.mensaje) + '</p>'
+      );
+      return;
+    }
+    pintarReporte(r.reporte);
+  });
+}
+
+function pintarReporte(rep) {
+  var filas = (rep.calificaciones || []).map(function (m) {
+    return '<tr><td class="mat">' + esc(m.a) + '</td>' +
+      '<td class="c"><span class="cal ' + colorCal(m.c) + '">' +
+      Number(m.c).toFixed(1) + '</span></td></tr>';
+  }).join('');
+
+  if (!filas) {
+    filas = '<tr><td colspan="2" style="color:#8C8377">Todavía no hay calificaciones capturadas.</td></tr>';
+  }
+
+  pintar(
+    '<div class="rep-enc"><div class="t">' + esc(rep.etiqueta) + '</div>' +
+      '<div class="f">Corte al ' + esc(rep.fechaCorte) + '</div></div>' +
+
+    '<div class="aviso ambar" style="margin-top:0;margin-bottom:12px;cursor:pointer" id="avLey">' +
+      '<b>Calificaciones parciales.</b> Son el avance a la fecha de corte, no la calificación ' +
+      'final del trimestre. <span style="text-decoration:underline;white-space:nowrap" id="masLey">Leer más</span>' +
+      '<div id="ley" class="oculto" style="margin-top:9px;padding-top:9px;border-top:1px solid rgba(107,85,22,.25)">' +
+      'Las calificaciones de este reporte son las reales al día en que se generó: pueden subir ' +
+      'o bajar según el desempeño del alumno en la segunda mitad del trimestre.<br><br>' +
+      'Para reponer trabajos no entregados, el alumno debe hablar directamente con los ' +
+      'profesores de esas asignaturas y llegar a un acuerdo para regularizarse.</div></div>' +
+
+    '<table><thead><tr><th>Asignatura</th><th class="c">Calificación parcial</th></tr></thead>' +
+    '<tbody>' + filas + '</tbody></table>' +
+
+    (rep.promedio !== null && rep.promedio !== undefined
+      ? '<div class="promedio"><div class="et">Promedio parcial<br>' +
+        '<span style="font-weight:400;font-size:11px;color:#8A7A73">al ' +
+        esc(rep.fechaCorte) + '</span></div>' +
+        '<div class="nu">' + Number(rep.promedio).toFixed(1) + '</div></div>'
+      : '') +
+
+    aviso('resPdf') +
+
+    (rep.hayPdf
+      ? '<button class="btn" id="btnPdf">Obtener reporte detallado</button>' +
+        '<p class="mini" style="margin-top:9px;text-align:center">Se descarga en PDF, con el ' +
+        'desglose por asignatura y las indicaciones de la dirección.</p>'
+      : '<div class="aviso ambar">El reporte detallado todavía no está disponible.</div>') +
+
+    '<div class="chips"><span class="chip">Calificación parcial, no es boleta</span>' +
+    '<span class="chip">Corte al ' + esc(rep.fechaCorte) + '</span></div>' +
+
+    '<p class="mini" style="margin-top:14px">Estas calificaciones corresponden al corte ' +
+      'indicado y pueden cambiar hasta el cierre del trimestre. Dudas sobre una asignatura: ' +
+      'con el profesor correspondiente o con el asesor de grupo.</p>'
+  );
+
+  $('avLey').addEventListener('click', function () {
+    var caja = $('ley'), mas = $('masLey');
+    var abierto = !caja.classList.contains('oculto');
+    caja.classList.toggle('oculto', abierto);
+    mas.textContent = abierto ? 'Leer más' : 'Ocultar';
+  });
+
+  var btn = $('btnPdf');
+  if (btn) btn.addEventListener('click', bajarPdf);
+}
+
+function bajarPdf() {
+  var btn = $('btnPdf');
+  btn.disabled = true;
+  ponAviso('resPdf', 'ambar', 'Preparando el archivo…');
+
+  API.pdf(ESTADO.sesion, ESTADO.hijo.grupo, ESTADO.hijo.nombre).then(function (r) {
+    btn.disabled = false;
+    if (!r.ok) {
+      if (r.expirada) { sesionVencida(); return; }
+      ponAviso('resPdf', 'rojo', esc(r.mensaje));
+      return;
+    }
+    guardarArchivo(r.base64, r.nombreArchivo);
+    ponAviso('resPdf', 'verde', 'Listo, revise sus descargas.');
+  });
+}
+
+/**
+ * Arma el PDF y dispara la descarga. Se hace por pedazos de 4 KB
+ * porque atob() sobre una cadena de cientos de miles de caracteres
+ * de un golpe se atora en celulares de gama baja.
+ */
+function guardarArchivo(base64, nombre) {
+  try {
+    var binario = atob(base64);
+    var pedazos = [];
+    for (var i = 0; i < binario.length; i += 4096) {
+      var trozo = binario.slice(i, i + 4096);
+      var bytes = new Uint8Array(trozo.length);
+      for (var j = 0; j < trozo.length; j++) bytes[j] = trozo.charCodeAt(j);
+      pedazos.push(bytes);
+    }
+    var url = URL.createObjectURL(new Blob(pedazos, { type: 'application/pdf' }));
+    var a = document.createElement('a');
+    a.href = url; a.download = nombre;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  } catch (e) {
+    ponAviso('resPdf', 'rojo', 'No se pudo abrir el archivo en este teléfono.');
+  }
+}
+
+/* ==========================================================
+   MENÚ
+   ========================================================== */
+
+function vistaMenu() {
+  etiqueta('Mi cuenta');
+  $('tabs').classList.remove('on');
+
+  var variosHijos = ESTADO.hijos.length > 1;
+
+  pintar(
+    '<p class="titulo">Mi cuenta</p>' +
+    '<p class="mini">' + esc(ESTADO.tutor) + (ESTADO.correo ? ' · ' + esc(ESTADO.correo) : '') + '</p>' +
+
+    '<div class="menu-caja">' +
+      (variosHijos
+        ? '<button class="menu-op" id="opHijo"><span>Cambiar de hijo</span><span style="color:#C9C4BD">&rsaquo;</span></button>'
+        : '') +
+      '<button class="menu-op" id="opPass"><span>Cambiar mi contraseña</span><span style="color:#C9C4BD">&rsaquo;</span></button>' +
+      '<button class="menu-op" id="opContacto"><span>Contactar a la escuela</span><span style="color:#C9C4BD">&rsaquo;</span></button>' +
+      '<button class="menu-op rojo" id="opSalir"><span>Cerrar sesión</span><span>&rsaquo;</span></button>' +
+    '</div>' +
+
+    '<div class="aviso ambar"><b>Ojo con cerrar sesión:</b> para volver a entrar necesita ' +
+      'su correo y su contraseña.</div>' +
+
+    '<button class="btn sec chi" id="btnAtras">Regresar</button>' +
+    '<div class="chips"><span class="chip">Versión ' + esc(CONFIG.VERSION) + '</span></div>'
+  );
+
+  $('btnAtras').addEventListener('click', volverAlHijo);
+  if (variosHijos) $('opHijo').addEventListener('click', vistaHijos);
+  $('opPass').addEventListener('click', vistaCambiarContrasena);
+  $('opContacto').addEventListener('click', function () {
+    window.location.href = 'mailto:' + CONFIG.CORREO_CONTACTO;
+  });
+  $('opSalir').addEventListener('click', cerrarSesion);
+}
+
+function volverAlHijo() {
+  etiqueta('Comunidad JB');
+  modoEncabezado(true);
+  irATab(ESTADO.tab === 'calificaciones' ? 'calificaciones' : ESTADO.tab);
+}
+
+function vistaCambiarContrasena() {
+  etiqueta('Cambiar contraseña');
+  $('tabs').classList.remove('on');
+
+  pintar(
+    '<p class="titulo">Cambiar mi contraseña</p>' +
+    '<label for="actual">Contraseña actual</label>' +
+    '<input type="password" id="actual" autocomplete="current-password">' +
+    '<label for="c1">Contraseña nueva</label>' +
+    '<input type="password" id="c1" autocomplete="new-password" placeholder="Mínimo 6 caracteres">' +
+    '<div class="fuerza"><i id="fz"></i></div>' +
+    '<label for="c2">Repita la nueva</label>' +
+    '<input type="password" id="c2" autocomplete="new-password">' +
+    aviso('res') +
+    '<button class="btn" id="btn">Guardar</button>' +
+    '<button class="btn sec chi" id="btnAtras">Cancelar</button>' +
+    '<div class="aviso ambar">Al cambiarla se cierran las sesiones abiertas en otros ' +
+      'teléfonos. En este se queda abierta.</div>'
+  );
+  engancharFuerza('c1', 'fz');
+  $('btnAtras').addEventListener('click', vistaMenu);
+
+  $('btn').addEventListener('click', function () {
+    var actual = $('actual').value, c1 = $('c1').value, c2 = $('c2').value;
+    if (!actual) { ponAviso('res', 'rojo', 'Escriba su contraseña actual.'); return; }
+    if (c1 !== c2) { ponAviso('res', 'rojo', 'Las dos contraseñas nuevas no son iguales.'); return; }
+    if (c1.length < 6) { ponAviso('res', 'rojo', 'La contraseña debe tener al menos 6 caracteres.'); return; }
+
+    this.disabled = true;
+    ponAviso('res', 'ambar', 'Guardando…');
+
+    API.cambiarContrasena(ESTADO.sesion, actual, c1).then(function (r) {
+      $('btn').disabled = false;
+      if (!r.ok) {
+        if (r.expirada) { sesionVencida(); return; }
+        ponAviso('res', 'rojo', esc(r.mensaje));
+        return;
+      }
+      ESTADO.sesion = r.sesion;
+      MEMORIA.guardar('sesion', r.sesion);
+      ponAviso('res', 'verde', 'Listo, su contraseña quedó cambiada.');
+      setTimeout(volverAlHijo, 1500);
+    });
+  });
+}
+
+function cerrarSesion() {
+  var token = ESTADO.sesion;
+  // Se borra del teléfono de inmediato, sin esperar al servidor:
+  // si la red falla, el papá igual queda fuera de este aparato.
+  MEMORIA.borrar('sesion');
+  MEMORIA.borrar('hijo');
+  ESTADO.sesion = null; ESTADO.hijo = null; ESTADO.hijos = [];
+  if (token) API.cerrarSesion(token);
+  vistaEntrar('Cerró su sesión.');
+}
+
+function sesionVencida() {
+  MEMORIA.borrar('sesion');
+  ESTADO.sesion = null;
+  vistaEntrar('Por seguridad, vuelva a entrar con su correo y contraseña.');
+}
+
+/* ==========================================================
+   SERVICE WORKER
+   Es lo que hace que la app se pueda instalar como ícono.
+   Si falla, la app sigue funcionando: solo no se instala.
+   ========================================================== */
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('./sw.js').catch(function () { /* ni modo */ });
+  });
+}
+
+arrancar();

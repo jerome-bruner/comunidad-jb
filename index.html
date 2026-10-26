@@ -35,14 +35,21 @@
     <div class="etiq" id="encEtiqueta">Comunidad JB</div>
   </div>
 
-  <!-- Barra chica: se ve ya adentro, con el hijo seleccionado -->
+  <!-- Barra chica: se ve ya adentro, con el hijo seleccionado.
+       El botón «Cambiar» solo aparece cuando el adulto tiene más
+       de un hijo, y abre el cajón de abajo. -->
   <div class="barra" id="barra">
-    <div>
+    <div class="ini" id="barraIni"></div>
+    <div class="quienes">
       <div class="quien" id="barraNombre"></div>
       <div class="sub" id="barraGrupo"></div>
     </div>
+    <button class="cambiar oculto" id="barraCambiar">Cambiar <span>&#9662;</span></button>
     <button class="ham" id="barraMenu" aria-label="Menú">&#9776;</button>
   </div>
+
+  <!-- Cajón de hermanos: lo llena app.js al tocar «Cambiar» -->
+  <div class="cajon oculto" id="cajonHijos"></div>
 
   <div class="cuerpo" id="cuerpo">
     <div class="cargando">Cargando…</div>

@@ -45,11 +45,45 @@ function pintar(html) {
 
 function etiqueta(t) { $('encEtiqueta').textContent = t; }
 
+/* ---------- pestañas encendidas ---------- */
+
+/** Las de CONFIG.TABS que de verdad existen en la página. */
+function tabsEncendidas() {
+  var pedidas = (CONFIG.TABS && CONFIG.TABS.length) ? CONFIG.TABS : ['calificaciones'];
+  return pedidas.filter(function (t) {
+    return document.querySelector('.tab[data-t="' + t + '"]');
+  });
+}
+
+/**
+ * Esconde las pestañas apagadas y acomoda el orden de CONFIG.TABS.
+ * Con una sola encendida la barra no se muestra: una barra de una
+ * pestaña no sirve de nada y ocupa alto de pantalla.
+ */
+function prepararTabs() {
+  var vivas = tabsEncendidas();
+  var barra = $('tabs');
+
+  Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (b) {
+    b.classList.toggle('oculto', vivas.indexOf(b.dataset.t) === -1);
+  });
+
+  // Reacomoda para que salgan en el orden que diga CONFIG.TABS.
+  vivas.forEach(function (t) {
+    barra.appendChild(document.querySelector('.tab[data-t="' + t + '"]'));
+  });
+
+  if (ESTADO.tab && vivas.indexOf(ESTADO.tab) === -1) ESTADO.tab = vivas[0];
+}
+
+function hayBarraDeTabs() { return tabsEncendidas().length > 1; }
+
 /** Encabezado grande (antes de entrar) o barra chica (ya adentro). */
 function modoEncabezado(dentro) {
   $('enc').classList.toggle('oculto', !!dentro);
   $('barra').classList.toggle('on', !!dentro);
-  $('tabs').classList.toggle('on', !!dentro);
+  $('tabs').classList.toggle('on', !!dentro && hayBarraDeTabs());
+  if (!dentro) cerrarCajonHijos();
 
   // Las tiras de arriba son de adentro: en las pantallas de entrar
   // o de alta no tienen nada que hacer.
@@ -96,6 +130,48 @@ function tarjetaAlumno(nombre, grupo) {
          '<div class="det">' + esc(grupo) + '</div></div>';
 }
 
+/* ==========================================================
+   CAJÓN DE HERMANOS
+   Va en el encabezado, no en una pantalla aparte: con varias
+   pestañas el papá cambia de hijo seguido, y mandarlo a otra
+   pantalla cada vez le hace perder dónde estaba.
+   ========================================================== */
+
+function cerrarCajonHijos() {
+  var c = $('cajonHijos');
+  if (c) { c.classList.add('oculto'); c.innerHTML = ''; }
+  var b = $('barraCambiar');
+  if (b) b.classList.remove('abierto');
+}
+
+function alternarCajonHijos() {
+  var c = $('cajonHijos');
+  if (!c) return;
+  if (!c.classList.contains('oculto')) { cerrarCajonHijos(); return; }
+
+  var actual = ESTADO.hijo ? (ESTADO.hijo.grupo + '|' + ESTADO.hijo.nombre) : '';
+
+  c.innerHTML = ESTADO.hijos.map(function (h, i) {
+    var esEste = (h.grupo + '|' + h.nombre) === actual;
+    return '<button class="cjhijo' + (esEste ? ' viendo' : '') + '" data-i="' + i + '">' +
+      '<div class="ini">' + esc(iniciales(h.nombre)) + '</div>' +
+      '<div class="cjdatos"><div class="nom">' + esc(h.nombre) + '</div>' +
+      '<div class="det">' + esc(h.grupo) + '</div></div>' +
+      (esEste ? '<div class="viendoet">Viendo</div>' : '') +
+      '</button>';
+  }).join('');
+
+  c.classList.remove('oculto');
+  $('barraCambiar').classList.add('abierto');
+
+  Array.prototype.forEach.call(c.querySelectorAll('.cjhijo'), function (b) {
+    b.addEventListener('click', function () {
+      cerrarCajonHijos();
+      entrarConHijo(ESTADO.hijos[Number(b.dataset.i)]);
+    });
+  });
+}
+
 /** Barra de fuerza de la contraseña. Orienta, no califica. */
 function medirContrasena(c) {
   var n = 0;
@@ -125,10 +201,19 @@ function arrancar() {
   $('pie').innerHTML = 'Dirección de secundaria · ' + esc(CONFIG.COLEGIO) +
     '<br><span style="font-size:9.5px">Versión ' + esc(CONFIG.VERSION) + '</span>';
 
-  $('barraMenu').addEventListener('click', vistaMenu);
+  $('barraMenu').addEventListener('click', function () {
+    cerrarCajonHijos();
+    vistaMenu();
+  });
+  $('barraCambiar').addEventListener('click', alternarCajonHijos);
+
+  prepararTabs();
 
   Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (b) {
-    b.addEventListener('click', function () { irATab(b.dataset.t); });
+    b.addEventListener('click', function () {
+      cerrarCajonHijos();
+      irATab(b.dataset.t);
+    });
   });
 
   // ¿Viene con una liga de alta? Eso manda sobre todo lo demás.
@@ -526,6 +611,11 @@ function entrarConHijo(hijo) {
   MEMORIA.guardar('hijo', hijo.grupo + '|' + hijo.nombre);
   $('barraNombre').textContent = hijo.nombre;
   $('barraGrupo').textContent = hijo.grupo;
+  $('barraIni').textContent = iniciales(hijo.nombre);
+
+  // El botón de cambiar solo tiene sentido con más de un hijo.
+  $('barraCambiar').classList.toggle('oculto', ESTADO.hijos.length < 2);
+
   modoEncabezado(true);
 
   pintarTiraInstalar();
@@ -541,6 +631,11 @@ function entrarConHijo(hijo) {
    ========================================================== */
 
 function irATab(cual) {
+  // Si alguien llega a una pestaña apagada (una sesión vieja que
+  // recordaba otra), se le manda a la primera encendida.
+  var vivas = tabsEncendidas();
+  if (vivas.indexOf(cual) === -1) cual = vivas[0] || 'calificaciones';
+
   ESTADO.tab = cual;
   Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (b) {
     b.classList.toggle('on', b.dataset.t === cual);
@@ -603,11 +698,22 @@ function pintarReporte(rep) {
     filas = '<tr><td colspan="2" style="color:#8C8377">Todavía no hay calificaciones capturadas.</td></tr>';
   }
 
-  pintar(
-    '<div class="rep-enc"><div class="t">' + esc(rep.etiqueta) + '</div>' +
-      '<div class="f">Corte al ' + esc(rep.fechaCorte) + '</div></div>' +
+  var hayPromedio = (rep.promedio !== null && rep.promedio !== undefined);
 
-    '<div class="aviso ambar" style="margin-top:0;margin-bottom:12px;cursor:pointer" id="avLey">' +
+  pintar(
+    // El orden es el de la maqueta: primero el promedio, grande,
+    // que es lo que el papá viene a ver; después el desglose.
+    '<p class="reptit">' + esc(rep.etiqueta) + '</p>' +
+
+    (hayPromedio
+      ? '<div class="promedio arriba">' +
+          '<div class="et">Promedio parcial</div>' +
+          '<div class="nu">' + Number(rep.promedio).toFixed(1) + '</div>' +
+          '<div class="alcorte">al ' + esc(rep.fechaCorte) + '</div>' +
+        '</div>'
+      : '') +
+
+    '<div class="aviso ambar" style="cursor:pointer" id="avLey">' +
       '<b>Calificaciones parciales.</b> Son el avance a la fecha de corte, no la calificación ' +
       'final del trimestre. <span style="text-decoration:underline;white-space:nowrap" id="masLey">Leer más</span>' +
       '<div id="ley" class="oculto" style="margin-top:9px;padding-top:9px;border-top:1px solid rgba(107,85,22,.25)">' +
@@ -616,26 +722,19 @@ function pintarReporte(rep) {
       'Para reponer trabajos no entregados, el alumno debe hablar directamente con los ' +
       'profesores de esas asignaturas y llegar a un acuerdo para regularizarse.</div></div>' +
 
+    '<p class="seccion">Por materia</p>' +
     '<table><thead><tr><th>Asignatura</th><th class="c">Calificación parcial</th></tr></thead>' +
     '<tbody>' + filas + '</tbody></table>' +
-
-    (rep.promedio !== null && rep.promedio !== undefined
-      ? '<div class="promedio"><div class="et">Promedio parcial<br>' +
-        '<span style="font-weight:400;font-size:11px;color:#8A7A73">al ' +
-        esc(rep.fechaCorte) + '</span></div>' +
-        '<div class="nu">' + Number(rep.promedio).toFixed(1) + '</div></div>'
-      : '') +
 
     aviso('resPdf') +
 
     (rep.hayPdf
-      ? '<button class="btn" id="btnPdf">Obtener reporte detallado</button>' +
-        '<p class="mini" style="margin-top:9px;text-align:center">Se descarga en PDF, con el ' +
+      ? '<button class="btn" id="btnPdf">Ver el reporte parcial</button>' +
+        '<p class="mini c" style="margin-top:9px">Se descarga en PDF, con el ' +
         'desglose por asignatura y las indicaciones de la dirección.</p>'
       : '<div class="aviso ambar">El reporte detallado todavía no está disponible.</div>') +
 
-    '<div class="chips"><span class="chip">Calificación parcial, no es boleta</span>' +
-    '<span class="chip">Corte al ' + esc(rep.fechaCorte) + '</span></div>' +
+    '<p class="corte">Corte del ' + esc(rep.fechaCorte) + '</p>' +
 
     '<p class="mini" style="margin-top:14px">Estas calificaciones corresponden al corte ' +
       'indicado y pueden cambiar hasta el cierre del trimestre. Dudas sobre una asignatura: ' +
@@ -703,7 +802,7 @@ function vistaMenu() {
   etiqueta('Mi cuenta');
   $('tabs').classList.remove('on');
 
-  var variosHijos = ESTADO.hijos.length > 1;
+  // «Cambiar de hijo» ya vive en el encabezado, así que aquí ya no va.
   var sinLeer = AVISOS.sinLeer().length;
   var falta = INSTALAR.faltaInstalar();
 
@@ -718,9 +817,6 @@ function vistaMenu() {
       (falta
         ? '<button class="menu-op oro" id="opInstalar"><span>Instalar la app</span>' +
           '<span style="color:#C9A227">&rsaquo;</span></button>'
-        : '') +
-      (variosHijos
-        ? '<button class="menu-op" id="opHijo"><span>Cambiar de hijo</span><span style="color:#C9C4BD">&rsaquo;</span></button>'
         : '') +
       '<button class="menu-op" id="opPass"><span>Cambiar mi contraseña</span><span style="color:#C9C4BD">&rsaquo;</span></button>' +
       '<button class="menu-op" id="opContacto"><span>Contactar a la escuela</span><span style="color:#C9C4BD">&rsaquo;</span></button>' +
@@ -741,7 +837,6 @@ function vistaMenu() {
       vistaInstalar({ alta: false, alSeguir: volverAlHijo });
     });
   }
-  if (variosHijos) $('opHijo').addEventListener('click', vistaHijos);
   $('opPass').addEventListener('click', vistaCambiarContrasena);
   $('opContacto').addEventListener('click', function () {
     window.location.href = 'mailto:' + CONFIG.CORREO_CONTACTO;

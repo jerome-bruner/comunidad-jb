@@ -26,8 +26,25 @@ var CONFIG = {
   CORREO_CONTACTO: 'coordinacioncolegiojbsecundaria@jeromebrunermorelia.edu.mx',
   WHATSAPP: '',          // opcional: '524431234567' para el botón de contacto
 
+  /* ----------------------------------------------------------
+     LAS PESTAÑAS QUE ESTÁN ENCENDIDAS
+
+     Aquí se prende cada pestaña cuando ya tenga datos de verdad.
+     Mientras no esté en esta lista, el papá no la ve: ni la
+     pestaña ni el espacio. Eso es a propósito — una pestaña que
+     dice «en construcción» invita a tocarla todos los días para
+     ver si ya, y acaba pareciendo que la app está a medias.
+
+     El orden de esta lista es el orden en que salen abajo.
+     Los nombres válidos son exactamente estos cinco:
+       calificaciones · pagos · cooperativa · calendario · credencial
+
+     Con una sola encendida, la barra de abajo ni aparece.
+     ---------------------------------------------------------- */
+  TABS: ['calificaciones'],
+
   /* Sube este número cada vez que cambies archivos de la app.
      Es lo que hace que el celular de los papás se entere de que
      hay versión nueva en vez de seguir con la que tiene guardada. */
-  VERSION: '1.1.0'
+  VERSION: '1.2.0'
 };

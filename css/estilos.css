@@ -57,10 +57,40 @@ body{
   color:#fff;position:sticky;top:0;z-index:20
 }
 .barra.on{display:flex}
-.barra .quien{font-size:13.5px;font-weight:700;line-height:1.25}
+.barra .ini{flex:0 0 auto;width:38px;height:38px;border-radius:50%;
+  background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.45);
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:700;letter-spacing:.5px}
+.barra .quienes{flex:1 1 auto;min-width:0}
+.barra .quien{font-size:13.5px;font-weight:700;line-height:1.25;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .barra .sub{font-size:10.5px;opacity:.85;margin-top:1px}
+.barra .cambiar{flex:0 0 auto;background:rgba(255,255,255,.16);
+  border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:999px;
+  padding:6px 11px;font-size:11.5px;font-family:inherit;cursor:pointer;
+  display:flex;align-items:center;gap:4px}
+.barra .cambiar span{font-size:9px;transition:transform .18s}
+.barra .cambiar.abierto span{transform:rotate(180deg)}
 .barra .ham{background:none;border:none;color:#fff;font-size:22px;cursor:pointer;
   padding:4px 6px;line-height:1;font-family:inherit}
+
+/* ---------- cajón de hermanos ---------- */
+.cajon{background:#fff;border-bottom:1px solid var(--borde);
+  box-shadow:0 4px 10px rgba(0,0,0,.07);position:sticky;top:0;z-index:19}
+.cjhijo{display:flex;align-items:center;gap:11px;width:100%;text-align:left;
+  background:none;border:none;border-bottom:1px solid #F4F0EB;
+  padding:12px 14px;font-family:inherit;cursor:pointer}
+.cjhijo:last-child{border-bottom:none}
+.cjhijo:active{background:#F6F2EF}
+.cjhijo.viendo{background:#FBF7F4}
+.cjhijo .ini{flex:0 0 auto;width:36px;height:36px;border-radius:50%;
+  background:var(--rojo);color:#fff;display:flex;align-items:center;
+  justify-content:center;font-weight:700;font-size:13px}
+.cjhijo .cjdatos{flex:1 1 auto;min-width:0}
+.cjhijo .nom{font-size:13.5px;font-weight:700;color:#3A2222;line-height:1.3}
+.cjhijo .det{font-size:11.5px;color:#7A6A63;margin-top:2px}
+.cjhijo .viendoet{flex:0 0 auto;font-size:9.5px;font-weight:700;color:var(--rojo);
+  background:#F6E8E8;border-radius:999px;padding:3px 8px;letter-spacing:.4px}
 
 .cuerpo{padding:18px 16px 26px;flex:1}
 
@@ -141,6 +171,23 @@ td.mat{font-weight:600;color:#2F2F2F;line-height:1.3}
   padding:14px;display:flex;justify-content:space-between;align-items:center}
 .promedio .et{font-size:12.5px;color:#6B5A53;font-weight:600}
 .promedio .nu{font-size:27px;font-weight:700;color:var(--rojo-oscuro);line-height:1}
+
+/* El promedio arriba y grande, como la maqueta: es lo que el papá
+   viene a ver, y de un vistazo. */
+.promedio.arriba{flex-direction:column;align-items:center;gap:2px;
+  margin-top:0;padding:18px 14px 16px;background:#fff;
+  border:1px solid var(--borde);border-top:3px solid var(--rojo)}
+.promedio.arriba .et{font-size:12px;color:#6B5A53;letter-spacing:.3px;
+  text-transform:uppercase}
+.promedio.arriba .nu{font-size:46px;line-height:1.05;letter-spacing:-1px}
+.promedio.arriba .alcorte{font-size:11px;color:var(--tenue)}
+
+/* Título del reporte y encabezado de sección */
+.reptit{font-size:15px;font-weight:700;color:var(--rojo-oscuro);
+  text-align:center;margin-bottom:12px;line-height:1.3}
+.seccion{font-size:11px;font-weight:700;color:#6B5A53;letter-spacing:.6px;
+  text-transform:uppercase;margin:18px 0 6px}
+.corte{font-size:11.5px;color:var(--tenue);text-align:center;margin-top:16px}
 
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
 .chip{background:#F3EFEC;border:1px solid #E0D9D3;border-radius:999px;padding:4px 10px;

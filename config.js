@@ -19,7 +19,7 @@ var CONFIG = {
 
   /* Ejemplo:
      https://script.google.com/macros/s/AKfycbx.../exec            */
-  API: 'PEGA_AQUI_LA_LIGA_EXEC_DEL_PORTAL',
+  API: 'https://script.google.com/macros/s/AKfycbxdXsq8FuagLn9LViCdsw8_8VL8D9r3SKq6VfW-D5bmwSxS0qLNUsucH4MFINZti5sImw/exec',
 
   COLEGIO: 'COLEGIO JEROME BRUNER',
   CICLO: 'Ciclo escolar 2026 – 2027',

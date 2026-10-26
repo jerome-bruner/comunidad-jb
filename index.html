@@ -21,6 +21,12 @@
 
 <div class="app">
 
+  <!-- Las dos tiras de arriba. Solo se ven ya adentro:
+       la de avisos cuando hay algo sin leer, y la de instalar
+       mientras no haya instalado. -->
+  <div class="tira oculto" id="tiraAvisos"></div>
+  <div class="tira oculto" id="tiraInstalar"></div>
+
   <!-- Encabezado grande: se ve antes de entrar -->
   <div class="enc" id="enc">
     <div class="escudo"><img src="./iconos/icono-192.png" alt="Colegio Jerome Bruner"></div>
@@ -54,8 +60,11 @@
   <div class="pie" id="pie"></div>
 </div>
 
+<!-- El orden importa: config primero, app al final (es el que arranca). -->
 <script src="./js/config.js"></script>
 <script src="./js/api.js"></script>
+<script src="./js/instalar.js"></script>
+<script src="./js/avisos.js"></script>
 <script src="./js/app.js"></script>
 </body>
 </html>

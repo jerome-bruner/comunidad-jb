@@ -50,6 +50,26 @@ function modoEncabezado(dentro) {
   $('enc').classList.toggle('oculto', !!dentro);
   $('barra').classList.toggle('on', !!dentro);
   $('tabs').classList.toggle('on', !!dentro);
+
+  // Las tiras de arriba son de adentro: en las pantallas de entrar
+  // o de alta no tienen nada que hacer.
+  if (!dentro) {
+    ['tiraAvisos', 'tiraInstalar'].forEach(function (id) {
+      var c = $(id);
+      if (c) { c.className = 'tira oculto'; c.innerHTML = ''; }
+    });
+  }
+}
+
+/** Las dos tiras de arriba, en orden: primero avisos, luego instalar. */
+function pintarTiras() {
+  pintarTiraAvisos();
+  pintarTiraInstalar();
+}
+
+function hoyTexto() {
+  var d = new Date();
+  return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
 }
 
 function aviso(id) { return '<div class="aviso" id="' + id + '"></div>'; }
@@ -242,8 +262,11 @@ function vistaCodigoEnviado(correo, correoOculto) {
       'un par de minutos; revise también el correo no deseado.</p>' +
     '<p class="texto">Con ese código va a crear la contraseña con la que entrará de ' +
       'ahora en adelante.</p>' +
-    '<div class="aviso verde"><b>Guarde esta app en su pantalla de inicio</b> para no tener ' +
-      'que buscar la liga otra vez. En el menú del navegador: «Agregar a pantalla de inicio».</div>' +
+    // Aquí ya NO se le dice que instale: la instalación es un paso
+    // completo más adelante, cuando ya tenga su contraseña. Pedirle
+    // dos cosas a la vez es lo que hace que no haga ninguna.
+    '<div class="aviso ambar"><b>No cierre esta pantalla.</b> Si la cierra, puede volver ' +
+      'a abrir la liga y tocar «Tengo un código del colegio».</div>' +
     '<button class="btn" id="btn">Ya tengo el código</button>'
   );
   $('btn').addEventListener('click', function () { vistaCrearContrasena(correo); });
@@ -306,7 +329,7 @@ function vistaCrearContrasena(correo, mensajePrevio) {
     API.crearContrasena(correoV, codigo, c1).then(function (r) {
       $('btn').disabled = false;
       if (!r.ok) { ponAviso('res', r.bloqueado ? 'rojo' : 'ambar', esc(r.mensaje)); return; }
-      abrirSesion(r);
+      abrirSesion(r, 'alta');
     });
   });
 }
@@ -390,16 +413,43 @@ function vistaEntrar(mensajePrevio, correoSugerido) {
         return;
       }
       MEMORIA.guardar('correo', correo);
-      abrirSesion(r);
+      abrirSesion(r, 'entrar');
     });
   });
 }
 
-function abrirSesion(r) {
+/**
+ * @param {Object} r       respuesta del servidor
+ * @param {string} momento 'alta'   acaba de crear su contraseña
+ *                         'entrar' entró con correo y contraseña
+ *                         vacío    se revalidó una sesión guardada
+ *
+ * EL PASO DE INSTALAR VA AQUÍ, Y A PROPÓSITO DESPUÉS DEL ALTA:
+ * primero se identifica con su código y su contraseña, y ya
+ * identificado se le pide instalar. Nunca al revés.
+ */
+function abrirSesion(r, momento) {
   ESTADO.sesion = r.sesion;
   ESTADO.tutor = r.tutor || '';
   ESTADO.hijos = r.hijos || [];
   MEMORIA.guardar('sesion', r.sesion);
+
+  // Alta: el paso se ve completo, incluso en computadora (ahí sale
+  // la nota de que la app es para el celular).
+  if (momento === 'alta' && !INSTALAR.yaInstalada()) {
+    vistaInstalar({ alta: true, alSeguir: elegirHijoOEntrar });
+    return;
+  }
+
+  // Ya tenía cuenta: se le ofrece, pero una sola vez al día. Ya se
+  // identificó, estorbarle en cada entrada sería de más.
+  if (momento === 'entrar' && INSTALAR.faltaInstalar() &&
+      MEMORIA.leer('ofrecido') !== hoyTexto()) {
+    MEMORIA.guardar('ofrecido', hoyTexto());
+    vistaInstalar({ alta: false, alSeguir: elegirHijoOEntrar });
+    return;
+  }
+
   elegirHijoOEntrar();
 }
 
@@ -477,6 +527,12 @@ function entrarConHijo(hijo) {
   $('barraNombre').textContent = hijo.nombre;
   $('barraGrupo').textContent = hijo.grupo;
   modoEncabezado(true);
+
+  pintarTiraInstalar();
+  // Los avisos se piden una vez por apertura de la app, no cada que
+  // cambia de hijo: son los mismos para toda la familia.
+  if (AVISOS.pedidos) pintarTiraAvisos(); else AVISOS.cargar();
+
   irATab('calificaciones');
 }
 
@@ -648,12 +704,21 @@ function vistaMenu() {
   $('tabs').classList.remove('on');
 
   var variosHijos = ESTADO.hijos.length > 1;
+  var sinLeer = AVISOS.sinLeer().length;
+  var falta = INSTALAR.faltaInstalar();
 
   pintar(
     '<p class="titulo">Mi cuenta</p>' +
     '<p class="mini">' + esc(ESTADO.tutor) + (ESTADO.correo ? ' · ' + esc(ESTADO.correo) : '') + '</p>' +
 
     '<div class="menu-caja">' +
+      '<button class="menu-op" id="opAvisos"><span>Avisos del colegio' +
+        (sinLeer ? ' <span class="punto">' + sinLeer + '</span>' : '') +
+        '</span><span style="color:#C9C4BD">&rsaquo;</span></button>' +
+      (falta
+        ? '<button class="menu-op oro" id="opInstalar"><span>Instalar la app</span>' +
+          '<span style="color:#C9A227">&rsaquo;</span></button>'
+        : '') +
       (variosHijos
         ? '<button class="menu-op" id="opHijo"><span>Cambiar de hijo</span><span style="color:#C9C4BD">&rsaquo;</span></button>'
         : '') +
@@ -670,6 +735,12 @@ function vistaMenu() {
   );
 
   $('btnAtras').addEventListener('click', volverAlHijo);
+  $('opAvisos').addEventListener('click', vistaAvisos);
+  if (falta) {
+    $('opInstalar').addEventListener('click', function () {
+      vistaInstalar({ alta: false, alSeguir: volverAlHijo });
+    });
+  }
   if (variosHijos) $('opHijo').addEventListener('click', vistaHijos);
   $('opPass').addEventListener('click', vistaCambiarContrasena);
   $('opContacto').addEventListener('click', function () {
@@ -681,6 +752,7 @@ function vistaMenu() {
 function volverAlHijo() {
   etiqueta('Comunidad JB');
   modoEncabezado(true);
+  pintarTiras();
   irATab(ESTADO.tab === 'calificaciones' ? 'calificaciones' : ESTADO.tab);
 }
 
@@ -737,6 +809,7 @@ function cerrarSesion() {
   MEMORIA.borrar('sesion');
   MEMORIA.borrar('hijo');
   ESTADO.sesion = null; ESTADO.hijo = null; ESTADO.hijos = [];
+  AVISOS.lista = []; AVISOS.pedidos = false;
   if (token) API.cerrarSesion(token);
   vistaEntrar('Cerró su sesión.');
 }

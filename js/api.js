@@ -104,7 +104,10 @@ var API = (function () {
 
     pdf: function (token, grupo, alumno) {
       return pedir('pdf', { sesion: token, grupo: grupo, alumno: alumno });
-    }
+    },
+
+    /** Los avisos vigentes para los hijos de este tutor. */
+    avisos: function (token) { return pedir('avisos', { sesion: token }); }
   };
 })();
 

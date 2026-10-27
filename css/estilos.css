@@ -117,6 +117,19 @@ input:focus{outline:none;border-color:var(--rojo)}
 input:disabled{background:#F4F2EE;color:var(--tenue)}
 .cod{letter-spacing:8px;text-align:center;font-weight:700;font-size:22px;text-transform:uppercase}
 
+/* ---------- campo de contraseña con ojo ---------- */
+.conclave{position:relative}
+/* Hueco para el ojo, para que el texto no le pase por debajo. */
+.conclave input{padding-right:50px}
+.ojo{position:absolute;right:5px;top:50%;transform:translateY(-50%);
+  width:40px;height:40px;border:none;background:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;padding:0;
+  border-radius:8px;color:#8C8377}
+.ojo svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.9;
+  stroke-linecap:round;stroke-linejoin:round}
+.ojo.on{color:var(--rojo)}
+.ojo:active{background:#F3EFEC}
+
 .fuerza{height:5px;border-radius:3px;background:#EAE5E0;margin-top:8px;overflow:hidden}
 .fuerza i{display:block;height:100%;width:0;background:var(--alto);transition:width .2s,background .2s}
 .fuerza i.media{background:#B8860B}

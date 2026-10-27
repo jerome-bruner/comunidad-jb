@@ -276,17 +276,36 @@ function abrirInvitacion(token) {
 
   API.verInvitacion(token).then(function (r) {
     if (!r.ok) { vistaLigaNoSirve(r.mensaje); return; }
-    vistaRegistro(token, r.alumno, r.grupo);
+    vistaRegistro(token, r.alumno, r.grupo, r.usados, r.tope);
   });
 }
 
-function vistaRegistro(token, alumno, grupo) {
+function vistaRegistro(token, alumno, grupo, usados, tope) {
   etiqueta('Registro de acceso');
+
+  // Cuántos lugares quedan. Se dice solo cuando ya hay alguien
+  // registrado: en una liga nueva, «quedan 3 de 3» no informa nada
+  // y de paso invita a repartirla.
+  var lugares = '';
+  if (usados > 0 && tope) {
+    var faltan = Math.max(0, tope - usados);
+    // Cada mitad concuerda por su cuenta: la primera con los que ya
+    // entraron, la segunda con los que faltan. Juntarlas en un solo
+    // if producía «Ya se registraron 1».
+    var ya = usados === 1
+      ? 'Ya se registró 1 adulto.'
+      : 'Ya se registraron ' + usados + ' adultos.';
+    var quedan = faltan === 1 ? 'Queda 1 lugar.' : 'Quedan ' + faltan + ' lugares.';
+    lugares = ya + ' ' + quedan;
+  }
+
   pintar(
     tarjetaAlumno(alumno, grupo) +
     '<p class="titulo">Registre su correo</p>' +
-    '<p class="texto">Esta liga es personal y sirve una sola vez. Con ella se da de alta ' +
-      'un adulto para ver la información de este alumno.</p>' +
+    '<p class="texto">Esta liga es de su familia. Con ella pueden darse de alta ' +
+      'hasta <b>tres adultos</b> para ver la información de este alumno, cada uno con ' +
+      'su propio correo y su propia contraseña.</p>' +
+    (lugares ? '<p class="texto"><b>' + lugares + '</b></p>' : '') +
 
     '<label for="correo">Su correo electrónico</label>' +
     '<input type="email" id="correo" autocomplete="email" inputmode="email" placeholder="correo@ejemplo.com">' +
@@ -297,8 +316,9 @@ function vistaRegistro(token, alumno, grupo) {
     '<label for="parentesco">Parentesco</label>' +
     '<input type="text" id="parentesco" placeholder="Madre, padre, abuela, tutor…">' +
 
-    '<div class="aviso ambar">Si otro adulto también necesita acceso, debe pedir ' +
-      'su propia liga en la dirección del colegio.</div>' +
+    '<div class="aviso ambar"><b>No comparta esta liga fuera de su familia.</b> ' +
+      'Quien la reciba puede registrarse y ver la información de su hijo. No la reenvíe ' +
+      'al grupo del salón.</div>' +
 
     aviso('res') +
     '<button class="btn" id="btn">Continuar</button>' +
@@ -428,8 +448,8 @@ function vistaLigaNoSirve(mensaje) {
     '<p class="texto">' + esc(mensaje || 'La liga no es válida.') + '</p>' +
     '<div class="aviso ambar">' +
       '<b>Si usted ya se registró:</b> entre con su correo y su contraseña.<br><br>' +
-      '<b>Si necesita darse de alta:</b> pida su propia liga en la dirección del colegio. ' +
-      'Cada adulto necesita la suya.</div>' +
+      '<b>Si necesita darse de alta:</b> pida una liga en la dirección del colegio. ' +
+      'Cada liga alcanza para tres adultos de la misma familia.</div>' +
     '<button class="btn sec" id="btn">Ya tengo cuenta, entrar</button>'
   );
   $('btn').addEventListener('click', function () { vistaEntrar(); });

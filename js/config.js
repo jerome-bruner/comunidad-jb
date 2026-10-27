@@ -46,5 +46,5 @@ var CONFIG = {
   /* Sube este número cada vez que cambies archivos de la app.
      Es lo que hace que el celular de los papás se entere de que
      hay versión nueva en vez de seguir con la que tiene guardada. */
-  VERSION: '1.2.0'
+  VERSION: '1.3.0'
 };

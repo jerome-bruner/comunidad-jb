@@ -21,7 +21,7 @@
    no se aplicó.
    ========================================================== */
 
-var VERSION = 'jb-1.5.0';
+var VERSION = 'jb-1.5.1';
 
 var CASCARA = [
   './',
@@ -33,6 +33,7 @@ var CASCARA = [
   './js/instalar.js',
   './js/avisos.js',
   './js/app.js',
+  './iconos/escudo.png',
   './iconos/icono-192.png',
   './iconos/icono-512.png'
 ];

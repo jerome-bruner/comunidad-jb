@@ -250,7 +250,7 @@ function vistaInstalar(o) {
       pasos([
         'Toque <b>Compartir</b>, el cuadrito con la flecha, abajo de la pantalla.',
         'Baje en la lista y elija <b>Agregar a pantalla de inicio</b>.',
-        'Toque <b>Agregar</b>. Le queda el ícono rojo con el escudo.'
+        'Toque <b>Agregar</b>. Le queda el ícono con el escudo del colegio.'
       ], true) +
       '<div class="aviso ambar">Si no ve la opción, es que abrió desde otra aplicación. ' +
         'Abra la liga en <b>Safari</b> y vuelva a intentar.</div>' +
@@ -313,7 +313,7 @@ function vistaInstalada(seguir) {
   pintar(
     '<div class="icono ok">&#10003;</div>' +
     '<p class="titulo c">La app quedó instalada</p>' +
-    '<p class="texto c">De aquí en adelante entre desde el ícono rojo de su pantalla de ' +
+    '<p class="texto c">De aquí en adelante entre desde el ícono de su pantalla de ' +
       'inicio. Ya no necesita la liga.</p>' +
     iconoDeLaApp() +
     '<button class="btn" id="btn">Continuar</button>'

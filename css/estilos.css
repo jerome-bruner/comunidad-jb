@@ -263,12 +263,12 @@ td.mat{font-weight:600;color:#2F2F2F;line-height:1.3}
   font-family:inherit;cursor:pointer;padding:6px}
 
 /* El ícono de la app, para que vea qué va a quedar en su pantalla */
+/* La vista previa enseña el ícono tal como va a quedar en el
+   teléfono: el archivo de verdad, sin inventarle un fondo. */
 .iconoapp{width:76px;height:76px;border-radius:18px;margin:14px auto 8px;
-  background:var(--rojo);
-  background-image:linear-gradient(160deg,var(--rojo-claro) 0%,var(--rojo-oscuro) 100%);
-  display:flex;align-items:center;justify-content:center;
-  box-shadow:0 4px 12px rgba(0,0,0,.22);overflow:hidden}
-.iconoapp img{width:62px;height:62px;object-fit:contain}
+  border:1px solid var(--borde);
+  box-shadow:0 4px 12px rgba(0,0,0,.18);overflow:hidden}
+.iconoapp img{width:100%;height:100%;object-fit:cover;display:block}
 
 .icono.instala{background:#EDF3FA;border:2px solid #BFD2E8;color:#2F6DA8}
 .icono.gris{background:#F3EFEC;border:2px solid #E0D9D3;color:#8C8377}

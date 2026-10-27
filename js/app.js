@@ -106,6 +106,55 @@ function hoyTexto() {
   return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
 }
 
+/* ==========================================================
+   CAMPOS DE CONTRASEÑA, CON OJO PARA VERLA
+   ----------------------------------------------------------
+   En el celular se teclea mal y a ciegas, y una contraseña que
+   no se puede revisar es la primera causa de «no me deja entrar».
+   El ojo arranca cerrado: se ve solo si el papá lo pide.
+   ========================================================== */
+
+var OJO_ABIERTO =
+  '<svg viewBox="0 0 24 24"><path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12z"/>' +
+  '<circle cx="12" cy="12" r="3.2"/></svg>';
+
+var OJO_CERRADO =
+  '<svg viewBox="0 0 24 24"><path d="M3 3l18 18"/>' +
+  '<path d="M10.6 6.2A9.9 9.9 0 0112 6c7 0 10.5 7 10.5 7a18 18 0 01-3.3 4.1"/>' +
+  '<path d="M6.6 7.6A18 18 0 001.5 13s3.5 7 10.5 7a9.8 9.8 0 004.3-.97"/>' +
+  '<path d="M9.8 10.1a3.2 3.2 0 004.4 4.4"/></svg>';
+
+/**
+ * Un campo de contraseña con su ojo. Devuelve la etiqueta y el
+ * campo ya armados; el id sigue siendo el del <input>, así que
+ * todo lo que ya lo buscaba por $(id) sigue igual.
+ */
+function campoClave(id, etiqueta, marcador, autocompletar) {
+  return '<label for="' + id + '">' + esc(etiqueta) + '</label>' +
+    '<div class="conclave">' +
+      '<input type="password" id="' + id + '" autocomplete="' + autocompletar + '" ' +
+        'placeholder="' + esc(marcador) + '">' +
+      '<button type="button" class="ojo" data-ojo="' + id + '" ' +
+        'aria-label="Mostrar la contraseña">' + OJO_CERRADO + '</button>' +
+    '</div>';
+}
+
+/* Un solo oyente para todos los ojos, puesto una vez. Los campos se
+   crean y se destruyen al cambiar de pantalla; el oyente no. */
+document.addEventListener('click', function (ev) {
+  var b = ev.target.closest ? ev.target.closest('[data-ojo]') : null;
+  if (!b) return;
+  var campo = $(b.dataset.ojo);
+  if (!campo) return;
+  var mostrando = campo.type === 'text';
+  campo.type = mostrando ? 'password' : 'text';
+  b.innerHTML = mostrando ? OJO_CERRADO : OJO_ABIERTO;
+  b.setAttribute('aria-label', mostrando ? 'Mostrar la contraseña' : 'Ocultar la contraseña');
+  b.classList.toggle('on', !mostrando);
+  // El foco vuelve al campo, donde estaba el papá escribiendo.
+  try { campo.focus(); } catch (e) { /* ni modo */ }
+});
+
 function aviso(id) { return '<div class="aviso" id="' + id + '"></div>'; }
 
 function ponAviso(id, clase, texto) {
@@ -404,12 +453,10 @@ function vistaCrearContrasena(correo, mensajePrevio) {
     '<input type="text" id="codigo" class="cod" maxlength="5" autocomplete="one-time-code" ' +
       'autocapitalize="characters" placeholder="-----">' +
 
-    '<label for="c1">Su contraseña nueva</label>' +
-    '<input type="password" id="c1" autocomplete="new-password" placeholder="Mínimo 6 caracteres">' +
+    campoClave('c1', 'Su contraseña nueva', 'Mínimo 6 caracteres', 'new-password') +
     '<div class="fuerza"><i id="fz"></i></div>' +
 
-    '<label for="c2">Repita la contraseña</label>' +
-    '<input type="password" id="c2" autocomplete="new-password" placeholder="La misma de arriba">' +
+    campoClave('c2', 'Repita la contraseña', 'La misma de arriba', 'new-password') +
 
     '<div class="aviso ambar"><b>Nadie más la va a saber, ni el colegio.</b> Si la olvida, ' +
       'se repone con un código nuevo a su correo.</div>' +
@@ -473,8 +520,7 @@ function vistaEntrar(mensajePrevio, correoSugerido) {
     '<input type="email" id="correo" autocomplete="email" inputmode="email" ' +
       'placeholder="correo@ejemplo.com" value="' + esc(recordado) + '">' +
 
-    '<label for="pass">Contraseña</label>' +
-    '<input type="password" id="pass" autocomplete="current-password" placeholder="Su contraseña">' +
+    campoClave('pass', 'Contraseña', 'Su contraseña', 'current-password') +
 
     aviso('res') +
     '<button class="btn" id="btn">Entrar</button>' +
@@ -877,13 +923,10 @@ function vistaCambiarContrasena() {
 
   pintar(
     '<p class="titulo">Cambiar mi contraseña</p>' +
-    '<label for="actual">Contraseña actual</label>' +
-    '<input type="password" id="actual" autocomplete="current-password">' +
-    '<label for="c1">Contraseña nueva</label>' +
-    '<input type="password" id="c1" autocomplete="new-password" placeholder="Mínimo 6 caracteres">' +
+    campoClave('actual', 'Contraseña actual', 'La que usa hoy', 'current-password') +
+    campoClave('c1', 'Contraseña nueva', 'Mínimo 6 caracteres', 'new-password') +
     '<div class="fuerza"><i id="fz"></i></div>' +
-    '<label for="c2">Repita la nueva</label>' +
-    '<input type="password" id="c2" autocomplete="new-password">' +
+    campoClave('c2', 'Repita la nueva', 'La misma de arriba', 'new-password') +
     aviso('res') +
     '<button class="btn" id="btn">Guardar</button>' +
     '<button class="btn sec chi" id="btnAtras">Cancelar</button>' +

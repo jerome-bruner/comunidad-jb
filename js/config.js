@@ -24,7 +24,25 @@ var CONFIG = {
   COLEGIO: 'COLEGIO JEROME BRUNER',
   CICLO: 'Ciclo escolar 2026 – 2027',
   CORREO_CONTACTO: 'coordinacioncolegiojbsecundaria@jeromebrunermorelia.edu.mx',
-  WHATSAPP: '',          // opcional: '524431234567' para el botón de contacto
+  /* ----------------------------------------------------------
+     WHATSAPP DE LA DIRECCIÓN
+
+     Con número aquí, el botón de contacto de la app abre WhatsApp
+     con el mensaje ya empezado y el nombre del alumno adentro.
+     Vacío, abre el correo de arriba.
+
+     CÓMO SE ESCRIBE: solo dígitos, con clave de país y SIN el +,
+     sin espacios y sin guiones. Para México son 52 y los 10
+     dígitos del celular:
+
+         WHATSAPP: '524431234567'
+
+     Si al probarlo WhatsApp dice que el número no es válido,
+     ponle un 1 después del 52 ('5214431234567'): los números
+     mexicanos dados de alta hace años todavía llevan ese 1.
+     Pruébalo tú antes de subirlo.
+     ---------------------------------------------------------- */
+  WHATSAPP: '524438576891',
 
   /* ----------------------------------------------------------
      LAS PESTAÑAS QUE ESTÁN ENCENDIDAS
@@ -46,5 +64,5 @@ var CONFIG = {
   /* Sube este número cada vez que cambies archivos de la app.
      Es lo que hace que el celular de los papás se entere de que
      hay versión nueva en vez de seguir con la que tiene guardada. */
-  VERSION: '1.4.0'
+  VERSION: '1.5.0'
 };

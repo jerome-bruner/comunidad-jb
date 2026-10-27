@@ -96,6 +96,21 @@ var INSTALAR = {
     MEMORIA.guardar('instalada', '1');
   },
 
+  /**
+   * Si tiene sentido OFRECERLA en el menú. Más flojo que
+   * faltaInstalar a propósito: aquel decide si se insiste con la
+   * tira, éste nada más decide si existe la opción.
+   *
+   * En iPhone no hay forma de saber que se desinstaló —no existe el
+   * aviso del navegador—, así que la opción tiene que estar siempre
+   * a la mano. Un menú sin salida es peor que una opción de más.
+   */
+  sePuedeOfrecer: function () {
+    if (this.yaInstalada()) return false;
+    if (this.esEscritorio()) return false;
+    return true;
+  },
+
   /** Abre el cuadro de instalación del teléfono. Solo si hay evento. */
   lanzar: function (alAcabar) {
     var ev = this.evento;
@@ -120,6 +135,14 @@ var INSTALAR = {
 window.addEventListener('beforeinstallprompt', function (ev) {
   ev.preventDefault();
   INSTALAR.evento = ev;
+
+  // El navegador SOLO lanza este aviso cuando la app NO está
+  // instalada. Entonces esto es prueba de que se desinstaló, y hay
+  // que borrar la marca de «ya la agregué» o la app nunca volvería
+  // a ofrecerla. Es lo que pasaba al desinstalarla y querer volver:
+  // quitar el ícono no borra lo que el navegador tiene guardado.
+  MEMORIA.borrar('instalada');
+
   if (typeof INSTALAR.alLlegarElEvento === 'function') INSTALAR.alLlegarElEvento();
 });
 

@@ -155,6 +155,41 @@ document.addEventListener('click', function (ev) {
   try { campo.focus(); } catch (e) { /* ni modo */ }
 });
 
+/* ==========================================================
+   CONTACTO CON LA DIRECCIÓN
+   ----------------------------------------------------------
+   Por WhatsApp si hay número en config; si no, correo. Un papá
+   atorado a las ocho de la noche no escribe un correo.
+
+   El mensaje va prellenado con el alumno y el grupo: quien
+   contesta del otro lado ya sabe de quién le hablan, en vez de
+   empezar con «¿de qué alumno me dice?».
+   ========================================================== */
+
+function ligaDeContacto() {
+  var wa = String((CONFIG && CONFIG.WHATSAPP) || '').replace(/[^0-9]/g, '');
+  if (!wa) return 'mailto:' + CONFIG.CORREO_CONTACTO;
+
+  var quien = ESTADO.hijo
+    ? ('sobre ' + ESTADO.hijo.nombre + ' de ' + ESTADO.hijo.grupo)
+    : 'sobre la aplicación Comunidad JB';
+
+  var texto = 'Hola, le escribo ' + quien + '.';
+  return 'https://wa.me/' + wa + '?text=' + encodeURIComponent(texto);
+}
+
+function contactarEscuela() {
+  var liga = ligaDeContacto();
+  // En la app instalada, window.open deja la ventana colgada si el
+  // teléfono no tiene WhatsApp; cambiar de ubicación se comporta
+  // igual que tocar una liga normal.
+  window.location.href = liga;
+}
+
+function hayWhatsapp() {
+  return String((CONFIG && CONFIG.WHATSAPP) || '').replace(/[^0-9]/g, '') !== '';
+}
+
 function aviso(id) { return '<div class="aviso" id="' + id + '"></div>'; }
 
 function ponAviso(id, clase, texto) {
@@ -497,9 +532,13 @@ function vistaLigaNoSirve(mensaje) {
       '<b>Si usted ya se registró:</b> entre con su correo y su contraseña.<br><br>' +
       '<b>Si necesita darse de alta:</b> pida una liga en la dirección del colegio. ' +
       'Cada liga alcanza para tres adultos de la misma familia.</div>' +
-    '<button class="btn sec" id="btn">Ya tengo cuenta, entrar</button>'
+    '<button class="btn sec" id="btn">Ya tengo cuenta, entrar</button>' +
+    (hayWhatsapp()
+      ? '<button class="btn" id="btnWa">Pedir una liga nueva por WhatsApp</button>'
+      : '')
   );
   $('btn').addEventListener('click', function () { vistaEntrar(); });
+  if (hayWhatsapp()) $('btnWa').addEventListener('click', contactarEscuela);
 }
 
 /* ==========================================================
@@ -870,7 +909,7 @@ function vistaMenu() {
 
   // «Cambiar de hijo» ya vive en el encabezado, así que aquí ya no va.
   var sinLeer = AVISOS.sinLeer().length;
-  var falta = INSTALAR.faltaInstalar();
+  var falta = INSTALAR.sePuedeOfrecer();
 
   pintar(
     '<p class="titulo">Mi cuenta</p>' +
@@ -885,7 +924,9 @@ function vistaMenu() {
           '<span style="color:#C9A227">&rsaquo;</span></button>'
         : '') +
       '<button class="menu-op" id="opPass"><span>Cambiar mi contraseña</span><span style="color:#C9C4BD">&rsaquo;</span></button>' +
-      '<button class="menu-op" id="opContacto"><span>Contactar a la escuela</span><span style="color:#C9C4BD">&rsaquo;</span></button>' +
+      '<button class="menu-op" id="opContacto"><span>' +
+        (hayWhatsapp() ? 'Escribir al colegio por WhatsApp' : 'Contactar a la escuela') +
+        '</span><span style="color:#C9C4BD">&rsaquo;</span></button>' +
       '<button class="menu-op rojo" id="opSalir"><span>Cerrar sesión</span><span>&rsaquo;</span></button>' +
     '</div>' +
 
@@ -904,9 +945,7 @@ function vistaMenu() {
     });
   }
   $('opPass').addEventListener('click', vistaCambiarContrasena);
-  $('opContacto').addEventListener('click', function () {
-    window.location.href = 'mailto:' + CONFIG.CORREO_CONTACTO;
-  });
+  $('opContacto').addEventListener('click', contactarEscuela);
   $('opSalir').addEventListener('click', cerrarSesion);
 }
 

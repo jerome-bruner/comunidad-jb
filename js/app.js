@@ -831,7 +831,11 @@ function n1(v) {
   return (v === null || v === undefined || v === '') ? '—' : Number(v).toFixed(1);
 }
 
-/** Entero. Las materias de primaria se califican con enteros. */
+/**
+ * Entero. Ya NO se usa para calificaciones — desde el 19/nov/2026
+ * ninguna se redondea en la boleta. Queda para las inasistencias, que
+ * se cuentan en días.
+ */
 function ent(v) {
   return (v === null || v === undefined || v === '') ? '—' : String(Math.round(Number(v)));
 }
@@ -977,9 +981,11 @@ function pintarBoletaPrimaria(b, d) {
       : '';
 
     var mats = (c.m || []).map(function (m) {
+      // Un decimal, igual que los campos y el promedio: en la boleta de
+      // primaria no se redondea ninguna calificación (19/nov/2026).
       var val = varios
-        ? trims.map(function (t) { return ent(m.v ? m.v[t] : null); }).join(' · ')
-        : ent(m.v ? m.v[trims[0]] : null);
+        ? trims.map(function (t) { return n1(m.v ? m.v[t] : null); }).join(' · ')
+        : n1(m.v ? m.v[trims[0]] : null);
       return '<div class="mt"><span class="mt-n">' + esc(m.a) + '</span>' +
              '<span class="mt-v">' + esc(val) + '</span></div>';
     }).join('');
@@ -1001,7 +1007,7 @@ function pintarBoletaPrimaria(b, d) {
       if (v !== null && v !== undefined && v !== '') { suma += Number(v); hay = true; }
     });
     if (hay) {
-      inas = '<p class="corte">Inasistencias: ' + suma + '</p>';
+      inas = '<p class="corte">Inasistencias: ' + ent(suma) + '</p>';
     }
   }
 

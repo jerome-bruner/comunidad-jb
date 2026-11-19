@@ -879,6 +879,28 @@ function tabCalificaciones() {
   });
 }
 
+/**
+ * PISTA DE DIAGNOSTICO - temporal, puesta el 19/nov/2026.
+ *
+ * Dibuja en chiquito lo que contesto el servidor cuando la pantalla
+ * queda vacia. Esta porque el registro del servidor decia una cosa y el
+ * telefono mostraba otra, y sin ver la respuesta real no se podia saber
+ * cual de los dos mentia. QUITAR cuando se resuelva.
+ */
+function pistaPP() {
+  var s = ESTADO.secciones;
+  var h = ESTADO.hijo || {};
+  var d = s
+    ? ('boleta=' + s.calificaciones + ' / parcial=' + s.avanceParcial +
+       ' / nivel=' + s.nivel + ' / trae=' + (s.boleta ? 'si' : 'no') +
+       ' / trims=' + JSON.stringify(s.trimestresCerrados || []))
+    : 'no se pidio secciones';
+  return '<p style="margin-top:22px;font-size:10px;color:#B3ACA3;text-align:center;' +
+    'word-break:break-all;line-height:1.5">' + esc(d) + '<br>' +
+    esc('id=' + (h.alumnoId || '(vacio)') + ' / nivel=' + (h.nivel || '(vacio)') +
+        ' / grupo=' + (h.grupo || '')) + '</p>';
+}
+
 function rutaCalificaciones() {
   var s = ESTADO.secciones || {};
   if (s.calificaciones && !ESTADO.verParcial) { cargarBoleta(); return; }
@@ -889,7 +911,7 @@ function rutaCalificaciones() {
     '<div class="icono ok" style="background:#F3EFEC;border-color:#E0D9D3;color:#8C8377">&#8987;</div>' +
     '<p class="titulo" style="text-align:center">Todavía no hay calificaciones</p>' +
     '<p class="texto" style="text-align:center">Aparecen aquí en cuanto el colegio cierra ' +
-      'el trimestre. Le avisaremos desde el colegio.</p>'
+      'el trimestre. Le avisaremos desde el colegio.</p>' + pistaPP()
   );
 }
 
@@ -939,7 +961,7 @@ function cargarBoleta() {
       pintar(barraDeVistas() +
         '<div class="icono ok" style="background:#F3EFEC;border-color:#E0D9D3;color:#8C8377">&#8987;</div>' +
         '<p class="titulo" style="text-align:center">Todavía no hay boleta</p>' +
-        '<p class="texto" style="text-align:center">' + esc(r.mensaje) + '</p>');
+        '<p class="texto" style="text-align:center">' + esc(r.mensaje) + '</p>' + pistaPP());
       engancharVistas();
       return;
     }
@@ -959,8 +981,16 @@ function pintarBoleta(b) {
   var esPri = datos && !Array.isArray(datos) &&
               String(datos.n || '').toUpperCase() === 'PRIMARIA';
 
-  if (esPri) pintarBoletaPrimaria(b, datos);
-  else pintarBoletaSecundaria(b, Array.isArray(datos) ? datos : []);
+  try {
+    if (esPri) pintarBoletaPrimaria(b, datos);
+    else pintarBoletaSecundaria(b, Array.isArray(datos) ? datos : []);
+  } catch (e) {
+    // Sin esto, un tropiezo al dibujar deja la pantalla en «Cargando…»
+    // para siempre y parece que el servidor nunca contestó.
+    pintar('<div class="aviso rojo">No pudimos dibujar la boleta: ' +
+           esc(e && e.message ? e.message : e) + '</div>' + pistaPP());
+    return;
+  }
 
   engancharVistas();
   var btn = $('btnPdf');
@@ -1131,7 +1161,7 @@ function cargarParcial() {
       pintar(barraDeVistas() +
         '<div class="icono ok" style="background:#F3EFEC;border-color:#E0D9D3;color:#8C8377">&#8987;</div>' +
         '<p class="titulo" style="text-align:center">Todavía no hay reporte</p>' +
-        '<p class="texto" style="text-align:center">' + esc(r.mensaje) + '</p>');
+        '<p class="texto" style="text-align:center">' + esc(r.mensaje) + '</p>' + pistaPP());
       engancharVistas();
       return;
     }

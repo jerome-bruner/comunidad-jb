@@ -71,6 +71,18 @@ var API = (function () {
       });
   }
 
+  /** El cuerpo común de las llamadas que se refieren a un alumno. */
+  function conAlumno(sesion, a) {
+    a = a || {};
+    return {
+      sesion: sesion,
+      grupo: a.grupo || '',
+      alumno: a.alumno || '',
+      alumnoId: a.alumnoId || '',
+      nivel: a.nivel || ''
+    };
+  }
+
   return {
     verInvitacion: function (token) { return pedir('verInvitacion', { token: token }); },
 
@@ -98,13 +110,38 @@ var API = (function () {
       return pedir('cambiarContrasena', { sesion: token, actual: actual, nueva: nueva });
     },
 
-    calificaciones: function (token, grupo, alumno) {
-      return pedir('calificaciones', { sesion: token, grupo: grupo, alumno: alumno });
+    /* ------------------------------------------------------------
+       LAS CUATRO QUE PIDEN UN ALUMNO
+
+       Reciben un objeto { grupo, alumno, alumnoId, nivel } en vez de
+       grupo y nombre sueltos. Desde que primaria entró a la app el
+       grupo ya no identifica a nadie —los dos niveles tienen 1°A,
+       2°A, 2°B, 3°A y 3°B—, así que se manda también el número de
+       alumno y el nivel, que es por donde cruza el servidor.
+
+       El servidor sigue aceptando solo grupo y nombre, a propósito:
+       una versión vieja de la app puede quedarse meses en un
+       teléfono y nadie se queda sin ver a su hijo por no actualizar.
+       ------------------------------------------------------------ */
+
+    /** Qué tiene este alumno: boleta, avance parcial, y de qué nivel es. */
+    secciones: function (token, a) {
+      return pedir('secciones', conAlumno(token, a));
     },
 
-    pdf: function (token, grupo, alumno) {
-      return pedir('pdf', { sesion: token, grupo: grupo, alumno: alumno });
+    /** El avance parcial de mitad de trimestre. */
+    calificaciones: function (token, a) {
+      return pedir('calificaciones', conAlumno(token, a));
     },
+
+    /** El PDF del avance parcial. */
+    pdf: function (token, a) { return pedir('pdf', conAlumno(token, a)); },
+
+    /** La boleta oficial del trimestre cerrado. */
+    boleta: function (token, a) { return pedir('boleta', conAlumno(token, a)); },
+
+    /** El PDF de la boleta. */
+    pdfBoleta: function (token, a) { return pedir('pdfBoleta', conAlumno(token, a)); },
 
     /** Los avisos vigentes para los hijos de este tutor. */
     avisos: function (token) { return pedir('avisos', { sesion: token }); }

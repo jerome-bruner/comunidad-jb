@@ -24,8 +24,50 @@ var ESTADO = {
   correo: '',       // enmascarado, solo para mostrar
   hijos: [],
   hijo: null,       // el alumno seleccionado
+  secciones: null,  // qué tiene este hijo: boleta, avance parcial, nivel
+  verParcial: false,// cuando hay boleta Y avance, cuál se está viendo
   tab: 'calificaciones'
 };
+
+/* ==========================================================
+   NIVEL E IDENTIDAD DEL HIJO
+   ----------------------------------------------------------
+   Desde que primaria entró a la app, el grupo ya no identifica
+   a nadie: los dos niveles tienen 1°A, 2°A, 2°B, 3°A y 3°B. El
+   servidor cruza por el número de alumno; aquí se usa para la
+   llave de «el último hijo que vio» y para no confundir dos
+   hermanos en grupos que se llaman igual.
+   ========================================================== */
+
+function llaveHijo(h) {
+  if (!h) return '';
+  return h.alumnoId ? ('id:' + h.alumnoId)
+                    : ((h.nivel || '') + '|' + h.grupo + '|' + h.nombre);
+}
+
+/**
+ * La pastilla de nivel se muestra SOLO si el adulto tiene hijos en
+ * más de un nivel. Es justo el caso en que hace falta: con un hijo
+ * en 1°A de primaria y otro en 1°A de secundaria, las dos tarjetas
+ * se verían idénticas. Con un solo nivel la pastilla no distingue
+ * nada y nada más estorba.
+ */
+function hayDosNiveles() {
+  var vistos = {};
+  ESTADO.hijos.forEach(function (h) {
+    var n = String(h.nivel || '').toUpperCase();
+    if (n) vistos[n] = true;
+  });
+  return Object.keys(vistos).length > 1;
+}
+
+function pastillaNivel(h) {
+  if (!hayDosNiveles()) return '';
+  var n = String((h && h.nivel) || '').toUpperCase();
+  if (!n) return '';
+  return '<span class="nivel ' + (n === 'PRIMARIA' ? 'pri' : 'sec') + '">' +
+         esc(n === 'PRIMARIA' ? 'Primaria' : 'Secundaria') + '</span>';
+}
 
 /* ---------- utilidades ---------- */
 
@@ -233,14 +275,14 @@ function alternarCajonHijos() {
   if (!c) return;
   if (!c.classList.contains('oculto')) { cerrarCajonHijos(); return; }
 
-  var actual = ESTADO.hijo ? (ESTADO.hijo.grupo + '|' + ESTADO.hijo.nombre) : '';
+  var actual = llaveHijo(ESTADO.hijo);
 
   c.innerHTML = ESTADO.hijos.map(function (h, i) {
-    var esEste = (h.grupo + '|' + h.nombre) === actual;
+    var esEste = llaveHijo(h) === actual;
     return '<button class="cjhijo' + (esEste ? ' viendo' : '') + '" data-i="' + i + '">' +
       '<div class="ini">' + esc(iniciales(h.nombre)) + '</div>' +
       '<div class="cjdatos"><div class="nom">' + esc(h.nombre) + '</div>' +
-      '<div class="det">' + esc(h.grupo) + '</div></div>' +
+      '<div class="det">' + esc(h.grupo) + pastillaNivel(h) + '</div></div>' +
       (esEste ? '<div class="viendoet">Viendo</div>' : '') +
       '</button>';
   }).join('');
@@ -282,7 +324,9 @@ function engancharFuerza(idCampo, idBarra) {
 function arrancar() {
   $('encColegio').textContent = CONFIG.COLEGIO;
   $('encCiclo').textContent = CONFIG.CICLO;
-  $('pie').innerHTML = 'Dirección de secundaria · ' + esc(CONFIG.COLEGIO) +
+  // Sin nivel en el pie: la misma app la usan papás de primaria y de
+  // secundaria, y «Dirección de secundaria» le quedaba mal a la mitad.
+  $('pie').innerHTML = esc(CONFIG.COLEGIO) +
     '<br><span style="font-size:9.5px">Versión ' + esc(CONFIG.VERSION) + '</span>';
 
   $('barraMenu').addEventListener('click', function () {
@@ -342,7 +386,7 @@ function elegirHijoOEntrar() {
   var ultimo = MEMORIA.leer('hijo');
   if (ultimo) {
     var hallado = ESTADO.hijos.filter(function (h) {
-      return (h.grupo + '|' + h.nombre) === ultimo;
+      return llaveHijo(h) === ultimo;
     })[0];
     if (hallado) { entrarConHijo(hallado); return; }
   }
@@ -695,7 +739,7 @@ function vistaHijos() {
     return '<button class="hijo" data-i="' + i + '">' +
       '<div class="ini">' + esc(iniciales(h.nombre)) + '</div>' +
       '<div><div class="nom">' + esc(h.nombre) + '</div>' +
-      '<div class="det">' + esc(h.grupo) + '</div></div></button>';
+      '<div class="det">' + esc(h.grupo) + pastillaNivel(h) + '</div></div></button>';
   }).join('');
 
   pintar(
@@ -713,9 +757,11 @@ function vistaHijos() {
 
 function entrarConHijo(hijo) {
   ESTADO.hijo = hijo;
-  MEMORIA.guardar('hijo', hijo.grupo + '|' + hijo.nombre);
+  ESTADO.secciones = null;      // son de ESE hijo: no se heredan al cambiar
+  ESTADO.verParcial = false;
+  MEMORIA.guardar('hijo', llaveHijo(hijo));
   $('barraNombre').textContent = hijo.nombre;
-  $('barraGrupo').textContent = hijo.grupo;
+  $('barraGrupo').innerHTML = esc(hijo.grupo) + pastillaNivel(hijo);
   $('barraIni').textContent = iniciales(hijo.nombre);
 
   // El botón de cambiar solo tiene sentido con más de un hijo.
@@ -771,21 +817,309 @@ function tabEnConstruccion(cual) {
 
 function colorCal(c) { return c >= 8 ? 'ok' : (c >= 7 ? 'med' : 'baj'); }
 
+/**
+ * Lo mismo, pero sin color cuando no hay calificación.
+ * Sin esto, un alumno que entró a media marcha veía su guion pintado
+ * de rojo, que se lee como reprobado y no como «no aplica».
+ */
+function claseCal(v) {
+  return (v === null || v === undefined || v === '') ? '' : claseCal(v);
+}
+
+/** Un decimal, y guion cuando no hay nada. Para campos y promedios. */
+function n1(v) {
+  return (v === null || v === undefined || v === '') ? '—' : Number(v).toFixed(1);
+}
+
+/** Entero. Las materias de primaria se califican con enteros. */
+function ent(v) {
+  return (v === null || v === undefined || v === '') ? '—' : String(Math.round(Number(v)));
+}
+
+var ROMANO_TRIM = { 1: 'Primer', 2: 'Segundo', 3: 'Tercer' };
+
+/* ==========================================================
+   QUÉ SE LE MUESTRA A ESTE HIJO
+   ----------------------------------------------------------
+   Son DOS cosas distintas y el papá no tiene por qué saberlo:
+
+     BOLETA        la oficial del trimestre ya cerrado. Manda.
+     AVANCE        el parcial de mitad de trimestre, que deja de
+                   tener sentido en cuanto cierra ese trimestre.
+
+   Por eso no se adivina del lado del teléfono: se le pregunta al
+   servidor con `secciones` qué tiene este alumno, y de ahí se
+   decide. Una sola llamada en vez de pedir las dos y descartar.
+   ========================================================== */
+
+function datosDelHijo() {
+  var h = ESTADO.hijo || {};
+  return { grupo: h.grupo, alumno: h.nombre, alumnoId: h.alumnoId || '', nivel: h.nivel || '' };
+}
+
 function tabCalificaciones() {
   pintar('<div class="cargando">Cargando calificaciones…</div>');
 
-  API.calificaciones(ESTADO.sesion, ESTADO.hijo.grupo, ESTADO.hijo.nombre).then(function (r) {
+  if (ESTADO.secciones) { rutaCalificaciones(); return; }
+
+  API.secciones(ESTADO.sesion, datosDelHijo()).then(function (r) {
+    if (!r.ok) {
+      if (r.expirada) { sesionVencida(); return; }
+      pintar('<div class="aviso rojo">' + esc(r.mensaje) + '</div>');
+      return;
+    }
+    ESTADO.secciones = r;
+    // Si no hay boleta todavía, lo que haya que ver es el avance.
+    ESTADO.verParcial = !r.calificaciones && !!r.avanceParcial;
+    rutaCalificaciones();
+  });
+}
+
+function rutaCalificaciones() {
+  var s = ESTADO.secciones || {};
+  if (s.calificaciones && !ESTADO.verParcial) { cargarBoleta(); return; }
+  if (s.avanceParcial) { cargarParcial(); return; }
+  if (s.calificaciones) { cargarBoleta(); return; }
+
+  pintar(
+    '<div class="icono ok" style="background:#F3EFEC;border-color:#E0D9D3;color:#8C8377">&#8987;</div>' +
+    '<p class="titulo" style="text-align:center">Todavía no hay calificaciones</p>' +
+    '<p class="texto" style="text-align:center">Aparecen aquí en cuanto el colegio cierra ' +
+      'el trimestre. Le avisaremos desde el colegio.</p>'
+  );
+}
+
+/**
+ * Los dos botones de arriba, SOLO cuando existen las dos cosas.
+ * Pasa a mitad del segundo trimestre: ya hay boleta del primero y
+ * además un avance del que va corriendo. Con una sola de las dos no
+ * se dibuja nada: un selector de una opción nada más confunde.
+ */
+function barraDeVistas() {
+  var s = ESTADO.secciones || {};
+  if (!s.calificaciones || !s.avanceParcial) return '';
+  return '<div class="vistas">' +
+    '<button class="vb' + (ESTADO.verParcial ? '' : ' on') + '" data-v="boleta">Boleta</button>' +
+    '<button class="vb' + (ESTADO.verParcial ? ' on' : '') + '" data-v="parcial">Avance actual</button>' +
+    '</div>';
+}
+
+function engancharVistas() {
+  Array.prototype.forEach.call(document.querySelectorAll('.vb'), function (b) {
+    b.addEventListener('click', function () {
+      ESTADO.verParcial = (b.dataset.v === 'parcial');
+      rutaCalificaciones();
+    });
+  });
+}
+
+/* ---------- la boleta oficial ---------- */
+
+function cargarBoleta() {
+  pintar('<div class="cargando">Cargando la boleta…</div>');
+
+  API.boleta(ESTADO.sesion, datosDelHijo()).then(function (r) {
+    if (!r.ok) {
+      if (r.expirada) { sesionVencida(); return; }
+      pintar('<div class="aviso rojo">' + esc(r.mensaje) + '</div>');
+      return;
+    }
+    if (r.sinBoleta) {
+      pintar(barraDeVistas() +
+        '<div class="icono ok" style="background:#F3EFEC;border-color:#E0D9D3;color:#8C8377">&#8987;</div>' +
+        '<p class="titulo" style="text-align:center">Todavía no hay boleta</p>' +
+        '<p class="texto" style="text-align:center">' + esc(r.mensaje) + '</p>');
+      engancharVistas();
+      return;
+    }
+    pintarBoleta(r.boleta);
+  });
+}
+
+/**
+ * Las dos formas del JSON se distinguen por su propia forma, no por
+ * una bandera aparte: secundaria manda una LISTA de materias con
+ * t1/t2/t3, y primaria manda un OBJETO con `n:'PRIMARIA'` y los
+ * cuatro campos formativos adentro. El servidor no interpreta
+ * ninguno de los dos; aquí se dibuja el que toque.
+ */
+function pintarBoleta(b) {
+  var datos = b.calificaciones;
+  var esPri = datos && !Array.isArray(datos) &&
+              String(datos.n || '').toUpperCase() === 'PRIMARIA';
+
+  if (esPri) pintarBoletaPrimaria(b, datos);
+  else pintarBoletaSecundaria(b, Array.isArray(datos) ? datos : []);
+
+  engancharVistas();
+  var btn = $('btnPdf');
+  if (btn) btn.addEventListener('click', function () { bajarPdf('boleta'); });
+}
+
+/* ---------- primaria: los cuatro campos formativos ---------- */
+
+function pintarBoletaPrimaria(b, d) {
+  var trims = (b.trimestres && b.trimestres.length) ? b.trimestres : [];
+  var varios = trims.length > 1;
+
+  var campos = (d.campos || []).map(function (c) {
+    // Con un trimestre, el número grande del campo es el de ese
+    // trimestre. Con varios, es el promedio acumulado — que es lo
+    // que cuenta y lo que trae el `prom` del servidor.
+    var grande = varios ? c.prom : (c.v ? c.v[trims[0]] : null);
+    if (grande === null || grande === undefined) grande = c.prom;
+
+    var porTrim = varios
+      ? '<div class="campo-trims">' + trims.map(function (t) {
+          return '<span><i>' + (ROMANO_TRIM[t] || t).substring(0, 3) + '.</i> ' +
+                 n1(c.v ? c.v[t] : null) + '</span>';
+        }).join('') + '</div>'
+      : '';
+
+    var mats = (c.m || []).map(function (m) {
+      var val = varios
+        ? trims.map(function (t) { return ent(m.v ? m.v[t] : null); }).join(' · ')
+        : ent(m.v ? m.v[trims[0]] : null);
+      return '<div class="mt"><span class="mt-n">' + esc(m.a) + '</span>' +
+             '<span class="mt-v">' + esc(val) + '</span></div>';
+    }).join('');
+
+    return '<div class="campo">' +
+      '<div class="campo-cab">' +
+        '<div class="campo-nom">' + esc(c.n) + '</div>' +
+        '<div class="campo-cal ' + claseCal(grande) + '">' + n1(grande) + '</div>' +
+      '</div>' + porTrim +
+      (mats ? '<div class="campo-mats">' + mats + '</div>' : '') +
+    '</div>';
+  }).join('');
+
+  var inas = '';
+  if (d.inas) {
+    var suma = 0, hay = false;
+    trims.forEach(function (t) {
+      var v = d.inas[t];
+      if (v !== null && v !== undefined && v !== '') { suma += Number(v); hay = true; }
+    });
+    if (hay) {
+      inas = '<p class="corte">Inasistencias: ' + suma + '</p>';
+    }
+  }
+
+  pintar(
+    barraDeVistas() +
+    '<p class="reptit">' + esc(b.etiqueta) + '</p>' +
+
+    '<div class="promedio arriba">' +
+      '<div class="et">Promedio general</div>' +
+      '<div class="nu">' + n1(b.promedioGeneral) + '</div>' +
+      '<div class="alcorte">al ' + esc(b.fechaCierre) + '</div>' +
+    '</div>' +
+
+    (d.prov
+      ? '<div class="aviso ambar"><b>Calificaciones provisionales.</b> Todavía faltan ' +
+        'materias por capturar; la boleta se actualiza en cuanto estén completas.</div>'
+      : '') +
+
+    '<div class="aviso ambar" style="cursor:pointer" id="avLey">' +
+      '<b>El promedio sale de los cuatro campos formativos.</b> Las materias de abajo ' +
+      'forman cada campo. <span style="text-decoration:underline;white-space:nowrap" id="masLey">Leer más</span>' +
+      '<div id="ley" class="oculto" style="margin-top:9px;padding-top:9px;border-top:1px solid rgba(107,85,22,.25)">' +
+      'En primaria la calificación oficial es la del <b>campo formativo</b>, que es el número ' +
+      'grande de cada tarjeta. Las materias que aparecen debajo son las que lo forman y se ' +
+      'muestran para que usted vea de dónde sale.<br><br>' +
+      'El <b>promedio general</b> es el promedio de los cuatro campos, no el de las materias.</div></div>' +
+
+    '<p class="seccion">Campos formativos</p>' +
+    campos + inas +
+
+    aviso('resPdf') +
+
+    (b.hayPdf
+      ? '<button class="btn" id="btnPdf">Descargar la boleta</button>' +
+        '<p class="mini c" style="margin-top:9px">Se descarga en PDF, tal como se entrega ' +
+        'impresa en el colegio.</p>'
+      : '<div class="aviso ambar">La boleta en PDF todavía no está disponible.</div>') +
+
+    '<p class="mini" style="margin-top:14px">Dudas sobre una materia: con el profesor ' +
+      'correspondiente o con el titular del grupo.</p>'
+  );
+
+  engancharLeerMas();
+}
+
+/* ---------- secundaria: materias por trimestre ---------- */
+
+function pintarBoletaSecundaria(b, lista) {
+  var trims = (b.trimestres && b.trimestres.length) ? b.trimestres : [1];
+
+  var cabeza = '<tr><th>Asignatura</th>' +
+    trims.map(function (t) {
+      return '<th class="c">' + (ROMANO_TRIM[t] || t).substring(0, 3) + '.</th>';
+    }).join('') +
+    (trims.length > 1 ? '<th class="c">Prom.</th>' : '') + '</tr>';
+
+  var filas = lista.map(function (m) {
+    var celdas = trims.map(function (t) {
+      var v = m['t' + t];
+      return '<td class="c">' + (v === null || v === undefined || v === ''
+        ? '—' : '<span class="cal ' + claseCal(v) + '">' + n1(v) + '</span>') + '</td>';
+    }).join('');
+    var prom = trims.length > 1
+      ? '<td class="c"><span class="cal ' + claseCal(m.promedio) + '">' +
+        n1(m.promedio) + '</span></td>'
+      : '';
+    return '<tr><td class="mat">' + esc(m.asignatura) + '</td>' + celdas + prom + '</tr>';
+  }).join('');
+
+  if (!filas) {
+    filas = '<tr><td colspan="' + (trims.length + 2) + '" style="color:#8C8377">' +
+            'La boleta todavía no trae calificaciones.</td></tr>';
+  }
+
+  pintar(
+    barraDeVistas() +
+    '<p class="reptit">' + esc(b.etiqueta) + '</p>' +
+
+    '<div class="promedio arriba">' +
+      '<div class="et">Promedio general</div>' +
+      '<div class="nu">' + n1(b.promedioGeneral) + '</div>' +
+      '<div class="alcorte">al ' + esc(b.fechaCierre) + '</div>' +
+    '</div>' +
+
+    '<p class="seccion">Por asignatura</p>' +
+    '<table><thead>' + cabeza + '</thead><tbody>' + filas + '</tbody></table>' +
+
+    aviso('resPdf') +
+
+    (b.hayPdf
+      ? '<button class="btn" id="btnPdf">Descargar la boleta</button>' +
+        '<p class="mini c" style="margin-top:9px">Se descarga en PDF, tal como se entrega ' +
+        'impresa en el colegio.</p>'
+      : '<div class="aviso ambar">La boleta en PDF todavía no está disponible.</div>') +
+
+    '<p class="mini" style="margin-top:14px">Estas son las calificaciones del trimestre ya ' +
+      'cerrado. Dudas sobre una asignatura: con el profesor correspondiente o con el asesor ' +
+      'de grupo.</p>'
+  );
+}
+
+/* ---------- el avance parcial (como estaba) ---------- */
+
+function cargarParcial() {
+  pintar('<div class="cargando">Cargando el avance…</div>');
+
+  API.calificaciones(ESTADO.sesion, datosDelHijo()).then(function (r) {
     if (!r.ok) {
       if (r.expirada) { sesionVencida(); return; }
       pintar('<div class="aviso rojo">' + esc(r.mensaje) + '</div>');
       return;
     }
     if (r.sinReporte) {
-      pintar(
+      pintar(barraDeVistas() +
         '<div class="icono ok" style="background:#F3EFEC;border-color:#E0D9D3;color:#8C8377">&#8987;</div>' +
         '<p class="titulo" style="text-align:center">Todavía no hay reporte</p>' +
-        '<p class="texto" style="text-align:center">' + esc(r.mensaje) + '</p>'
-      );
+        '<p class="texto" style="text-align:center">' + esc(r.mensaje) + '</p>');
+      engancharVistas();
       return;
     }
     pintarReporte(r.reporte);
@@ -806,6 +1140,7 @@ function pintarReporte(rep) {
   var hayPromedio = (rep.promedio !== null && rep.promedio !== undefined);
 
   pintar(
+    barraDeVistas() +
     // El orden es el de la maqueta: primero el promedio, grande,
     // que es lo que el papá viene a ver; después el desglose.
     '<p class="reptit">' + esc(rep.etiqueta) + '</p>' +
@@ -846,23 +1181,38 @@ function pintarReporte(rep) {
       'con el profesor correspondiente o con el asesor de grupo.</p>'
   );
 
-  $('avLey').addEventListener('click', function () {
-    var caja = $('ley'), mas = $('masLey');
+  engancharLeerMas();
+  engancharVistas();
+
+  var btn = $('btnPdf');
+  if (btn) btn.addEventListener('click', function () { bajarPdf('parcial'); });
+}
+
+/** El «Leer más» del aviso ámbar. Lo usan el parcial y la boleta de primaria. */
+function engancharLeerMas() {
+  var caja = $('ley'), mas = $('masLey'), av = $('avLey');
+  if (!caja || !mas || !av) return;
+  av.addEventListener('click', function () {
     var abierto = !caja.classList.contains('oculto');
     caja.classList.toggle('oculto', abierto);
     mas.textContent = abierto ? 'Leer más' : 'Ocultar';
   });
-
-  var btn = $('btnPdf');
-  if (btn) btn.addEventListener('click', bajarPdf);
 }
 
-function bajarPdf() {
+/**
+ * Baja el PDF que corresponda.
+ * @param {string} cual 'boleta' la oficial · 'parcial' el avance
+ */
+function bajarPdf(cual) {
   var btn = $('btnPdf');
   btn.disabled = true;
   ponAviso('resPdf', 'ambar', 'Preparando el archivo…');
 
-  API.pdf(ESTADO.sesion, ESTADO.hijo.grupo, ESTADO.hijo.nombre).then(function (r) {
+  var llamada = (cual === 'boleta')
+    ? API.pdfBoleta(ESTADO.sesion, datosDelHijo())
+    : API.pdf(ESTADO.sesion, datosDelHijo());
+
+  llamada.then(function (r) {
     btn.disabled = false;
     if (!r.ok) {
       if (r.expirada) { sesionVencida(); return; }

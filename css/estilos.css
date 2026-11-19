@@ -313,3 +313,54 @@ td.mat{font-weight:600;color:#2F2F2F;line-height:1.3}
   body{padding:18px 0}
   .app{border-radius:18px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.1);min-height:0}
 }
+
+/* ==========================================================
+   PRIMARIA Y BOLETAS  (versión 1.6.0)
+   ----------------------------------------------------------
+   Lo que entró cuando primaria se sumó a la app: la pastilla de
+   nivel, el cambio entre boleta y avance, y las tarjetas de los
+   cuatro campos formativos.
+   ========================================================== */
+
+/* ---------- pastilla de nivel ----------
+   Solo se dibuja cuando el adulto tiene hijos en los dos niveles:
+   con uno solo no distingue nada. Va pegada al grupo, que es
+   justo el dato que se repite entre niveles (1°A, 2°B…). */
+.nivel{display:inline-block;margin-left:7px;padding:1px 7px;border-radius:999px;
+  font-size:9.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;
+  vertical-align:1px}
+.nivel.pri{background:#EAF2EA;color:#2D6A2D;border:1px solid #CFE3CF}
+.nivel.sec{background:#F3EFEC;color:#7A5C3E;border:1px solid #E3D9D2}
+.barra .sub .nivel{margin-left:6px}
+
+/* ---------- boleta / avance ----------
+   Dos botones, y solo cuando de verdad existen las dos cosas. */
+.vistas{display:flex;gap:7px;margin:0 0 14px}
+.vistas .vb{flex:1 1 0;font-family:inherit;font-size:12.5px;font-weight:700;
+  padding:9px 8px;border-radius:9px;cursor:pointer;
+  border:1px solid #E3D9D2;background:#F6F2EF;color:#6B5A53}
+.vistas .vb.on{background:var(--rojo);border-color:var(--rojo);color:#fff}
+
+/* ---------- campos formativos (primaria) ----------
+   La calificación que cuenta es la del campo, así que va grande y
+   sola en su renglón; las materias van abajo, chicas y en gris.
+   Ese contraste es todo el diseño: si se vieran iguales, el papá
+   no sabría cuál es su calificación. */
+.campo{background:var(--card);border:1px solid var(--borde);border-radius:12px;
+  padding:13px 14px;margin-bottom:11px}
+.campo-cab{display:flex;align-items:center;gap:10px}
+.campo-nom{flex:1 1 auto;font-size:14px;font-weight:700;color:#3A2222;line-height:1.25}
+.campo-cal{flex:0 0 auto;font-size:25px;font-weight:700;line-height:1}
+.campo-cal.ok{color:var(--verde)}
+.campo-cal.med{color:var(--ambar)}
+.campo-cal.baj{color:var(--alto)}
+
+.campo-trims{display:flex;gap:14px;margin-top:7px;font-size:11.5px;color:#6B5A53}
+.campo-trims i{font-style:normal;color:var(--tenue);font-weight:700;
+  text-transform:uppercase;letter-spacing:.3px;font-size:9.5px}
+
+.campo-mats{margin-top:10px;padding-top:9px;border-top:1px solid var(--borde)}
+.campo-mats .mt{display:flex;align-items:baseline;gap:10px;padding:4px 0}
+.campo-mats .mt-n{flex:1 1 auto;font-size:12.5px;color:#5A4A45;line-height:1.3}
+.campo-mats .mt-v{flex:0 0 auto;font-size:13px;font-weight:700;color:#3F3F3F;
+  font-variant-numeric:tabular-nums}

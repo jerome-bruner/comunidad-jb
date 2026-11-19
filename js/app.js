@@ -920,6 +920,13 @@ function engancharVistas() {
 /* ---------- la boleta oficial ---------- */
 
 function cargarBoleta() {
+  // La boleta ya viene dentro de la respuesta de `secciones` desde el
+  // 19/nov/2026: es un renglón y cabe de sobra ahí. Pedirla aparte era
+  // un viaje entero al servidor —con su lectura de hoja— para traer algo
+  // que el servidor acababa de leer.
+  var s = ESTADO.secciones || {};
+  if (s.boleta) { pintarBoleta(s.boleta); return; }
+
   pintar('<div class="cargando">Cargando la boleta…</div>');
 
   API.boleta(ESTADO.sesion, datosDelHijo()).then(function (r) {
